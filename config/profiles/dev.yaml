@@ -1,0 +1,75 @@
+# EchoForge Runtime Shape A (Local Dev) configuration profile
+environment: dev
+runtime_shape: ShapeA_LocalDev
+
+database:
+  url: "postgresql+psycopg://postgres:LuckySebeka@localhost:5432/echo_forge"
+  pool_size: 5
+  timeout_seconds: 30
+
+jobqueue:
+  backend: local
+  enqueue_endpoint: "http://localhost:9001/jobs"
+  max_concurrency: 2
+  default_retry_attempts: 3
+  default_retry_delay_seconds: 30
+
+llm:
+  default_provider: openai
+  default_model: gpt-4o-mini
+  profiles:
+    echo_summary_v1:
+      provider: openai
+      model: gpt-4o-mini
+      temperature: 0.2
+      max_tokens: 800
+    echo_classify_v1:
+      provider: openai
+      model: gpt-4o-mini
+      temperature: 0.1
+      max_tokens: 400
+
+logging:
+  default_level: INFO
+  guides:
+    minimal:
+      level: WARN
+    normal:
+      level: INFO
+    verbose:
+      level: DEBUG
+
+capture:
+  watch_roots:
+    - id: dev-audio
+      root_path: "watch_roots/audio"
+      source_channel: watch_audio
+      runtime_shapes: [ShapeA_LocalDev]
+      file_types: ["audio/mpeg", "audio/wav"]
+      ensure_layout: true
+    - id: dev-documents
+      root_path: "watch_roots/documents"
+      source_channel: watch_documents
+      runtime_shapes: [ShapeA_LocalDev]
+      file_types: ["application/pdf", "text/plain"]
+      ensure_layout: true
+  manual_text:
+    hashing: sha256:text+channel
+  job_queue_profile:
+    backend: local
+    queue_name: capture-dev
+    enqueue_endpoint: "http://localhost:9001/jobs"
+    default_retry_attempts: 3
+    default_retry_delay_seconds: 30
+
+echo:
+  summary:
+    max_preview_chars: 400
+    max_deep_chars: 6000
+  classification:
+    max_labels: 3
+  entries:
+    default_pipeline_status: ingested
+    default_cognitive_status: unreviewed
+  archival:
+    auto_archive_after_days: null

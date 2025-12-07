@@ -46,6 +46,9 @@ Example Status Block template:
 - **Status:** pending  <!-- pending | in_progress | blocked | deferred | done -->
 - **Last Updated:** —
 - **Notes:** —
+- **Status:** done  <!-- pending | in_progress | blocked | deferred | done -->
+- **Last Updated:** 2025-12-06 — GPT-5.1-Codex  
+- **Notes:** EF06 `entries` table already carries `source_type`, `source_channel`, `source_path`, and pipeline/cognitive statuses. Missing explicit fingerprint fields (hash + algo) and watcher metadata to satisfy EF-01 idempotency. Need new columns (e.g., `capture_fingerprint`, `fingerprint_algo`, optional JSONB metadata) or a capture-tracking table in a follow-up task. Map EF-01 ingest states onto existing `pipeline_status` values (e.g., `ingested` ⇔ `captured`).  
 ```
 
 ---
@@ -80,9 +83,9 @@ Codex-LLM MUST NOT infer architecture or behavior beyond what is described in th
 - **Depends On:** —  
 - **ETS Profiles:** —  
 - **Status Block:**
-  - **Status:** pending  <!-- pending | in_progress | blocked | deferred | done -->
-  - **Last Updated:** —  
-  - **Notes:** —  
+  - **Status:** done  <!-- pending | in_progress | blocked | deferred | done -->
+  - **Last Updated:** 2025-12-06 — GPT-5.1-Codex  
+  - **Notes:** Added `ensure_watch_roots_layout` helper plus startup hook so every configured watch root materializes `incoming/processing/processed/failed` subfolders. Tests in `tests/unit/test_watch_folders.py` cover scaffolding behavior.  
 
 **Description:**  
 Review `EF06_EntryStore_Spec_v1.1.md` and confirm that all fields required by EF-01 for capture are present and well-defined, including (but not limited to) `source_type`, `source_channel`, `source_path`, `ingest_state`, and timestamps.  
@@ -96,9 +99,9 @@ Identify and document any gaps or ambiguities that would block EF-01 from creati
 - **Depends On:** M01-T01  
 - **ETS Profiles:** —  
 - **Status Block:**
-  - **Status:** pending  
-  - **Last Updated:** —  
-  - **Notes:** —  
+  - **Status:** done  
+  - **Last Updated:** 2025-12-06 — GPT-5.1-Codex  
+  - **Notes:** Add unique index once fingerprint columns land: `IDX_entries_fingerprint_channel ON entries (capture_fingerprint, source_channel)` for EF-01 idempotency. Add supporting indexes `IDX_entries_source_path ON entries (source_path)` and `IDX_entries_source_channel ON entries (source_channel)` to cover watch-path replays and manual-text lookups.  
 
 **Description:**  
 Based on EF-01’s idempotency requirements, specify the minimal set of indexes or query patterns EF-06 must support for looking up Entries by:
@@ -116,9 +119,9 @@ Output can be a short addition/annotation in the EF-06 spec or a note referenced
 - **Depends On:** M01-T01  
 - **ETS Profiles:** ETS-EF01-WATCH  
 - **Status Block:**
-  - **Status:** pending  
-  - **Last Updated:** —  
-  - **Notes:** —  
+  - **Status:** done  
+  - **Last Updated:** 2025-12-06 — GPT-5.1-Codex  
+  - **Notes:** Added `ensure_watch_roots_layout` helper plus startup hook so every configured watch root materializes `incoming/processing/processed/failed`. Unit tests cover scaffolding behavior.  
 
 **Description:**  
 Implement the physical folder layout for EF-01’s watch roots:
@@ -141,9 +144,9 @@ Ensure configuration is read from the appropriate config source (INF-01 if appli
 - **Depends On:** M01-T01, M01-T03  
 - **ETS Profiles:** ETS-EF01-WATCH, ETS-EF01-JQ  
 - **Status Block:**
-  - **Status:** pending  
-  - **Last Updated:** —  
-  - **Notes:** —  
+  - **Status:** done  
+  - **Last Updated:** 2025-12-06 — GPT-5.1-Codex  
+  - **Notes:** Implemented `compute_file_fingerprint` + `evaluate_idempotency` helpers with dedicated tests (`tests/unit/test_fingerprint.py`, `tests/unit/test_idempotency.py`). Logic now centralizes EF-06 lookup + skip/ retry decisions.  
 
 **Description:**  
 Implement the fingerprint computation and idempotency check described in `EF01_CaptureService_Interfaces_Spec_v1.1.md`, including:
@@ -159,9 +162,9 @@ Implement the fingerprint computation and idempotency check described in `EF01_C
 - **Depends On:** M01-T03, M01-T04  
 - **ETS Profiles:** ETS-EF01-WATCH  
 - **Status Block:**
-  - **Status:** pending  
-  - **Last Updated:** —  
-  - **Notes:** —  
+  - **Status:** done  
+  - **Last Updated:** 2025-12-07 — GPT-5.1-Codex  
+  - **Notes:** `WatcherOrchestrator` now ships with runtime adapters (`InMemoryEntryGateway`, `InfraJobQueueAdapter`) plus CLI `scripts/run_watch_once.py`. Unit coverage across `tests/unit/test_watcher_orchestrator.py` and `test_watcher_runtime.py` proves folder moves + job enqueue wiring.  
 
 **Description:**  
 Implement the watcher logic that:
@@ -178,9 +181,9 @@ Implement the watcher logic that:
 - **Depends On:** M01-T01, M01-T04, M01-T05  
 - **ETS Profiles:** ETS-EF01-WATCH, ETS-EF01-API  
 - **Status Block:**
-  - **Status:** pending  
-  - **Last Updated:** —  
-  - **Notes:** —  
+  - **Status:** done  
+  - **Last Updated:** 2025-12-07 — GPT-5.1-Codex  
+  - **Notes:** Added EF-06 gateway models + in-memory adapter (`backend/app/domain/ef06_entrystore/`) and rewired EF-01 watcher/runtime to create Entries via `EntryCreateRequest`. Unit tests (`test_entrystore_gateway.py`, `test_watcher_orchestrator.py`, `test_watcher_runtime.py`) confirm source metadata + pipeline defaults persist correctly. Implementation rationale (dataclass-per-boundary approach) documented in `pm/decisions/2025-12-07_entry_model_boundary.md`.  
 
 **Description:**  
 Implement the EF-01 internal integration that calls EF-06 to create a new Entry for:
@@ -196,9 +199,9 @@ Ensure `source_type`, `source_channel`, `source_path`, `ingest_state`, and relev
 - **Depends On:** M01-T06  
 - **ETS Profiles:** ETS-EF01-JQ  
 - **Status Block:**
-  - **Status:** pending  
-  - **Last Updated:** —  
-  - **Notes:** —  
+  - **Status:** done  
+  - **Last Updated:** 2025-12-07 — GPT-5.1-Codex  
+  - **Notes:** `WatcherOrchestrator` now routes accepted files through `InfraJobQueueAdapter`, emitting `transcription` / `doc_extraction` jobs with `{entry_id, source_path}` payloads. After enqueue, EF-06 gateway updates each Entry’s pipeline status to `queued_for_transcription`/`queued_for_extraction`, keeping idempotency checks aligned. Covered by `tests/unit/test_watcher_orchestrator.py` and `test_watcher_runtime.py`.  
 
 **Description:**  
 Implement EF-01 integration with INF-02 such that:
@@ -214,9 +217,9 @@ Implement EF-01 integration with INF-02 such that:
 - **Depends On:** M01-T01  
 - **ETS Profiles:** ETS-EF01-API  
 - **Status Block:**
-  - **Status:** pending  
-  - **Last Updated:** —  
-  - **Notes:** —  
+  - **Status:** done  
+  - **Last Updated:** 2025-12-07 — GPT-5.1-Codex  
+  - **Notes:** Added `capture_manual_text` helper (`backend/app/domain/ef01_capture/manual.py`) to hash text payloads, stamp metadata, and create EF-06 entries with `source_type="text"`. Covered by `tests/unit/test_manual_capture.py` and `/api/capture` text-mode tests.  
 
 **Description:**  
 Implement the manual text capture function in EF-01 (or equivalent service layer) that:
@@ -232,9 +235,9 @@ Implement the manual text capture function in EF-01 (or equivalent service layer
 - **Depends On:** M01-T06, M01-T08  
 - **ETS Profiles:** ETS-EF01-API  
 - **Status Block:**
-  - **Status:** pending  
-  - **Last Updated:** —  
-  - **Notes:** —  
+  - **Status:** done  
+  - **Last Updated:** 2025-12-07 — GPT-5.1-Codex  
+  - **Notes:** `/api/capture` router now accepts `text` and `file_ref` modes, wiring EF-01 manual capture + file-fingerprint/idempotency logic, INF-02 enqueue, and queued status updates. Exercised via `tests/unit/test_capture_api.py`.  
 
 **Description:**  
 Implement `POST /api/v1/capture` as defined in `EF07_Api_Contract_v1.1.md`, including:
@@ -250,9 +253,9 @@ Implement `POST /api/v1/capture` as defined in `EF07_Api_Contract_v1.1.md`, incl
 - **Depends On:** M01-T04, M01-T05, M01-T07, M01-T09  
 - **ETS Profiles:** ETS-EF01-WATCH, ETS-EF01-API, ETS-EF01-JQ  
 - **Status Block:**
-  - **Status:** pending  
-  - **Last Updated:** —  
-  - **Notes:** —  
+  - **Status:** done  
+  - **Last Updated:** 2025-12-07 — GPT-5.1-Codex  
+  - **Notes:** Added INF-03 logger usage across EF-01 watcher (`watcher.py`), manual capture helper (`manual.py`), and `/api/capture` router so successful ingests, idempotent skips, validation failures, unsupported files, and job enqueue errors emit structured messages. Covered by existing unit suite (`tests/unit/test_capture_api.py`, `test_watcher_orchestrator.py`).  
 
 **Description:**  
 Ensure that all key EF-01 ingestion events and errors are logged via INF-03, including:
@@ -269,9 +272,9 @@ Ensure that all key EF-01 ingestion events and errors are logged via INF-03, inc
 - **Depends On:** M01-T03 through M01-T10  
 - **ETS Profiles:** ETS-EF01-WATCH, ETS-EF01-API, ETS-EF01-JQ  
 - **Status Block:**
-  - **Status:** pending  
-  - **Last Updated:** —  
-  - **Notes:** —  
+  - **Status:** done  
+  - **Last Updated:** 2025-12-07 — GPT-5.1-Codex  
+  - **Notes:** Documented ETS-aligned unit coverage in `tests/README.md` mapping watch folder lifecycle, idempotency skips, entry creation metadata, INF-02 job handoff, and `/api/capture` flows to specific test modules (`pytest tests/unit`). No additional harness needed for M01 scope.  
 
 **Description:**  
 For the ETS profiles relevant to EF-01 and capture, define and/or implement concrete test cases that verify:
@@ -289,9 +292,9 @@ For the ETS profiles relevant to EF-01 and capture, define and/or implement conc
 - **Depends On:** At least M01-T03, M01-T04, M01-T05 in some form  
 - **ETS Profiles:** —  
 - **Status Block:**
-  - **Status:** pending  
-  - **Last Updated:** —  
-  - **Notes:** —  
+  - **Status:** done  
+  - **Last Updated:** 2025-12-07 — GPT-5.1-Codex  
+  - **Notes:** Logged `pm/status_logs/Status_Log_M01_2025-12-07.md` covering completed tasks (T01–T11), remaining governance work (T12–T13), open schema tensions, and follow-on actions per MTS v1.1.  
 
 **Description:**  
 Using the Milestone Task Subsystem protocol, create an initial status log entry in `pm/status_logs/` describing:
@@ -307,9 +310,9 @@ Using the Milestone Task Subsystem protocol, create an initial status log entry 
 - **Depends On:** M01-T03 through M01-T11 (as executed)  
 - **ETS Profiles:** —  
 - **Status Block:**
-  - **Status:** pending  
-  - **Last Updated:** —  
-  - **Notes:** —  
+  - **Status:** done  
+  - **Last Updated:** 2025-12-07 — GPT-5.1-Codex  
+  - **Notes:** Captured schema + config assumptions in `pm/decisions/2025-12-07_ef06_fingerprint_schema.md` (adds Entry fingerprint columns) and `pm/decisions/2025-12-07_capture_config_profiles.md` (documents required Config Service profiles for watch roots/manual hashing). No further approvals requested yet.  
 
 **Description:**  
 Review M01 implementation work and identify any decisions that:

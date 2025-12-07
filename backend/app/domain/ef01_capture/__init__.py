@@ -1,1 +1,1 @@
-"""EF-01 CaptureService logic placeholder."""
+"""EF-01 CaptureService domain package."""

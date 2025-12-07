@@ -2,6 +2,8 @@
 
 from sqlalchemy import create_engine
 
-ENGINE = create_engine(
-    "postgresql+psycopg://user:pass@localhost:5432/echoforge", echo=False
-)
+from ...config import load_settings
+
+settings = load_settings()
+
+ENGINE = create_engine(settings.database_url, echo=False, future=True)

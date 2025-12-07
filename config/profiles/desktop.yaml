@@ -1,0 +1,75 @@
+# EchoForge Runtime Shape B (Desktop Electron) configuration profile
+environment: desktop
+runtime_shape: ShapeB_DesktopElectron
+
+database:
+  url: "postgresql+psycopg://postgres:LuckySebeka@127.0.0.1:5432/echo_desktop"
+  pool_size: 10
+  timeout_seconds: 30
+
+jobqueue:
+  backend: local
+  enqueue_endpoint: "http://127.0.0.1:9001/jobs"
+  max_concurrency: 2
+  default_retry_attempts: 3
+  default_retry_delay_seconds: 30
+
+llm:
+  default_provider: openai
+  default_model: gpt-4o-mini
+  profiles:
+    echo_summary_v1:
+      provider: openai
+      model: gpt-4o-mini
+      temperature: 0.2
+      max_tokens: 800
+    echo_classify_v1:
+      provider: openai
+      model: gpt-4o-mini
+      temperature: 0.1
+      max_tokens: 400
+
+logging:
+  default_level: INFO
+  guides:
+    minimal:
+      level: WARN
+    normal:
+      level: INFO
+    verbose:
+      level: DEBUG
+
+capture:
+  watch_roots:
+    - id: desktop-audio
+      root_path: "~/.echoforge/watch/audio"
+      source_channel: desktop_audio
+      runtime_shapes: [ShapeB_DesktopElectron]
+      file_types: ["audio/mpeg", "audio/wav"]
+      ensure_layout: true
+    - id: desktop-documents
+      root_path: "~/.echoforge/watch/documents"
+      source_channel: desktop_documents
+      runtime_shapes: [ShapeB_DesktopElectron]
+      file_types: ["application/pdf", "text/plain"]
+      ensure_layout: true
+  manual_text:
+    hashing: sha256:text+channel
+  job_queue_profile:
+    backend: local
+    queue_name: capture-desktop
+    enqueue_endpoint: "http://127.0.0.1:9001/jobs"
+    default_retry_attempts: 3
+    default_retry_delay_seconds: 30
+
+echo:
+  summary:
+    max_preview_chars: 400
+    max_deep_chars: 6000
+  classification:
+    max_labels: 3
+  entries:
+    default_pipeline_status: ingested
+    default_cognitive_status: unreviewed
+  archival:
+    auto_archive_after_days: 365
