@@ -1,0 +1,23 @@
+{
+  "name": "echoforge-desktop-host",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/main/main.js",
+  "scripts": {
+    "dev": "cross-env NODE_ENV=development tsx src/main/main.ts",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint 'src/**/*.{ts,tsx}'"
+  },
+  "dependencies": {
+    "electron": "^31.2.0",
+    "electron-log": "^5.1.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.4",
+    "cross-env": "^7.0.3",
+    "eslint": "^9.9.0",
+    "typescript": "^5.5.4",
+    "tsx": "^4.16.2"
+  }
+}

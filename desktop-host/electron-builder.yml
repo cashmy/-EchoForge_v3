@@ -1,0 +1,8 @@
+appId: com.echoforge.desktop
+productName: EchoForge Desktop
+files:
+  - dist/**/*
+artifactName: EchoForge-${version}-${os}-${arch}
+extraResources:
+  - from: ../frontend/dist
+    to: resources/frontend

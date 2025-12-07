@@ -1,19 +1,60 @@
-# Python
+# --- Python / backend ---
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
 .mypy_cache/
 .pytest_cache/
+.ruff_cache/
+.venv/
+venv/
 .env
 .env.*
+.envrc
+.python-version
+build/
+dist/
+htmlcov/
+.coverage*
+pip-wheel-metadata/
+*.egg-info/
+*.sqlite3
+*.db
+*.log
 
-# Node
+# --- Node / frontend / desktop host ---
 node_modules/
-frontend/node_modules/
-desktop-host/node_modules/
+**/node_modules/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnp.*
+.eslintcache
+.vscode-test/
+.vite/
+frontend/.vite/
 frontend/dist/
 desktop-host/dist/
+desktop-host/out/
+desktop-host/release/
 
-# Editor
+# --- Tooling / editor ---
 .vscode/
 .idea/
+*.code-workspace
 .DS_Store
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# --- Local data / misc ---
+docker/postgres-data/
+docker/pgdata/
+scripts/*.log
+*.local
+
+# --- Governance / docs not tracked here ---
+protocols/
+Deprecated/
+project_scope/
