@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+.mypy_cache/
+.pytest_cache/
+.env
+.env.*
+
+# Node
+node_modules/
+frontend/node_modules/
+desktop-host/node_modules/
+frontend/dist/
+desktop-host/dist/
+
+# Editor
+.vscode/
+.idea/
+.DS_Store
