@@ -1,8 +1,14 @@
 """Tests for EF-01 watcher runtime helpers."""
 
+# Coverage: EF-01, EF-06, INF-02
+
+import pytest
+
 from backend.app.domain.ef01_capture.fingerprint import compute_file_fingerprint
 from backend.app.domain.ef01_capture.runtime import InfraJobQueueAdapter, run_watch_once
 from backend.app.domain.ef06_entrystore.gateway import InMemoryEntryStoreGateway
+
+pytestmark = [pytest.mark.ef01, pytest.mark.ef06, pytest.mark.inf02]
 
 
 class RecordingJobAdapter(InfraJobQueueAdapter):

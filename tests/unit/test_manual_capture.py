@@ -1,9 +1,13 @@
 """Tests for EF-01 manual text capture helpers."""
 
+# Coverage: EF-01, EF-06
+
 import pytest
 
 from backend.app.domain.ef01_capture.manual import capture_manual_text
 from backend.app.domain.ef06_entrystore.gateway import InMemoryEntryStoreGateway
+
+pytestmark = [pytest.mark.ef01, pytest.mark.ef06]
 
 
 def test_capture_manual_text_persists_entry_with_metadata():

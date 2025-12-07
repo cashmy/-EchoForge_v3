@@ -1,6 +1,10 @@
 """Unit tests for EF-01 watch folder helper utilities."""
 
+# Coverage: EF-01
+
 from pathlib import Path
+
+import pytest
 
 from backend.app.domain.ef01_capture.watch_folders import (
     WATCH_SUBDIRECTORIES,
@@ -8,6 +12,8 @@ from backend.app.domain.ef01_capture.watch_folders import (
     ensure_watch_roots_layout,
     list_incoming_paths,
 )
+
+pytestmark = [pytest.mark.ef01]
 
 
 def test_ensure_watch_root_layout_creates_expected_structure(tmp_path):

@@ -7,7 +7,7 @@ import os
 import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, List, Sequence
+from typing import Any, Dict, List, Optional, Sequence
 
 try:  # PyYAML is declared as a dependency but we fall back gracefully if missing.
     import yaml
@@ -45,6 +45,37 @@ DEFAULT_CAPTURE_JOB_QUEUE_PROFILE: dict[str, Any] = {
     "default_retry_attempts": 3,
     "default_retry_delay_seconds": 30,
 }
+DEFAULT_WHISPER_CONFIG: Dict[str, Any] = {
+    "enabled": False,
+    "model_id": "medium.en",
+    "device": "cpu",
+    "compute_type": "int8",
+    "task": "transcribe",
+    "language": None,
+    "transcript_output_root": "watch_roots/transcripts",
+    "transcript_public_base_url": None,
+    "beam_size": 5,
+    "best_of": 5,
+    "patience": None,
+    "length_penalty": 1.0,
+    "repetition_penalty": 1.0,
+    "temperature": 0.0,
+    "temperature_increment_on_fallback": 0.2,
+    "compression_ratio_threshold": 2.4,
+    "log_prob_threshold": None,
+    "no_speech_threshold": 0.6,
+    "initial_prompt": None,
+    "prefix": None,
+    "condition_on_previous_text": True,
+    "suppress_blank": True,
+    "suppress_tokens": [],
+    "without_timestamps": False,
+    "vad_enabled": False,
+    "vad_threshold": 0.5,
+    "vad_min_speech": 250,
+    "vad_max_silence": 2000,
+}
+
 DEFAULT_PROFILE_DICT: dict[str, Any] = {
     "environment": DEFAULT_ENVIRONMENT,
     "runtime_shape": DEFAULT_RUNTIME_SHAPE,
@@ -54,6 +85,7 @@ DEFAULT_PROFILE_DICT: dict[str, Any] = {
         "manual_text": {"hashing": DEFAULT_MANUAL_HASHING},
         "job_queue_profile": DEFAULT_CAPTURE_JOB_QUEUE_PROFILE,
     },
+    "llm": {"whisper": copy.deepcopy(DEFAULT_WHISPER_CONFIG)},
 }
 CONFIG_PROFILE_ENV = "ECHOFORGE_CONFIG_PROFILE"
 CONFIG_DIR_ENV = "ECHOFORGE_CONFIG_DIR"
@@ -140,13 +172,17 @@ def load_settings(
     capture_cfg = config_data.get("capture", {})
     capture_config = _build_capture_config(capture_cfg)
 
+    llm_cfg = copy.deepcopy(config_data.get("llm", {}))
+    whisper_cfg = _build_whisper_config(llm_cfg.get("whisper"))
+    llm_cfg["whisper"] = whisper_cfg
+
     settings = Settings(
         environment=environment,
         runtime_shape=runtime_shape,
         database_url=database_url,
         capture=capture_config,
         jobqueue=config_data.get("jobqueue", {}),
-        llm=config_data.get("llm", {}),
+        llm=llm_cfg,
         logging=config_data.get("logging", {}),
         echo=config_data.get("echo", {}),
         raw=config_data,
@@ -265,3 +301,107 @@ def _build_job_queue_profile(
             )
         ),
     )
+
+
+def _build_whisper_config(
+    whisper_cfg: dict[str, Any] | None,
+) -> Dict[str, Any]:
+    config = copy.deepcopy(DEFAULT_WHISPER_CONFIG)
+    if whisper_cfg:
+        for key, value in whisper_cfg.items():
+            if value is None:
+                continue
+            config[key] = value
+
+    overrides: Dict[str, Any] = {
+        "enabled": _env_bool("ECHOFORGE_WHISPER_ENABLED"),
+        "model_id": _env_str("ECHOFORGE_WHISPER_MODEL_ID"),
+        "device": _env_str("ECHOFORGE_WHISPER_DEVICE"),
+        "compute_type": _env_str("ECHOFORGE_WHISPER_COMPUTE_TYPE"),
+        "task": _env_str("ECHOFORGE_WHISPER_TASK"),
+        "language": _env_str("ECHOFORGE_WHISPER_LANGUAGE"),
+        "beam_size": _env_int("ECHOFORGE_WHISPER_BEAM_SIZE"),
+        "best_of": _env_int("ECHOFORGE_WHISPER_BEST_OF"),
+        "patience": _env_float("ECHOFORGE_WHISPER_PATIENCE"),
+        "length_penalty": _env_float("ECHOFORGE_WHISPER_LENGTH_PENALTY"),
+        "repetition_penalty": _env_float("ECHOFORGE_WHISPER_REPETITION_PENALTY"),
+        "temperature": _env_float("ECHOFORGE_WHISPER_TEMPERATURE"),
+        "temperature_increment_on_fallback": _env_float(
+            "ECHOFORGE_WHISPER_TEMPERATURE_INCREMENT_ON_FALLBACK"
+        ),
+        "compression_ratio_threshold": _env_float(
+            "ECHOFORGE_WHISPER_COMPRESSION_RATIO_THRESHOLD"
+        ),
+        "log_prob_threshold": _env_float("ECHOFORGE_WHISPER_LOGPROB_THRESHOLD"),
+        "no_speech_threshold": _env_float("ECHOFORGE_WHISPER_NO_SPEECH_THRESHOLD"),
+        "initial_prompt": _env_str("ECHOFORGE_WHISPER_INITIAL_PROMPT"),
+        "prefix": _env_str("ECHOFORGE_WHISPER_PREFIX"),
+        "condition_on_previous_text": _env_bool(
+            "ECHOFORGE_WHISPER_CONDITION_ON_PREVIOUS_TEXT"
+        ),
+        "suppress_blank": _env_bool("ECHOFORGE_WHISPER_SUPPRESS_BLANK"),
+        "suppress_tokens": _env_csv_ints("ECHOFORGE_WHISPER_SUPPRESS_TOKENS"),
+        "without_timestamps": _env_bool("ECHOFORGE_WHISPER_WITHOUT_TIMESTAMPS"),
+        "vad_enabled": _env_bool("ECHOFORGE_WHISPER_VAD_ENABLED"),
+        "vad_threshold": _env_float("ECHOFORGE_WHISPER_VAD_THRESHOLD"),
+        "vad_min_speech": _env_int("ECHOFORGE_WHISPER_VAD_MIN_SPEECH"),
+        "vad_max_silence": _env_int("ECHOFORGE_WHISPER_VAD_MAX_SILENCE"),
+    }
+    for key, value in overrides.items():
+        if value is None:
+            continue
+        config[key] = value
+    return config
+
+
+def _env_str(var_name: str) -> Optional[str]:
+    value = os.getenv(var_name)
+    if value is None or value == "":
+        return None
+    return value
+
+
+def _env_int(var_name: str) -> Optional[int]:
+    value = os.getenv(var_name)
+    if value is None or not value.strip():
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        return None
+
+
+def _env_float(var_name: str) -> Optional[float]:
+    value = os.getenv(var_name)
+    if value is None or not value.strip():
+        return None
+    try:
+        return float(value)
+    except ValueError:
+        return None
+
+
+def _env_bool(var_name: str) -> Optional[bool]:
+    value = os.getenv(var_name)
+    if value is None:
+        return None
+    normalized = value.strip().lower()
+    if normalized == "":
+        return None
+    return normalized in {"1", "true", "yes", "on"}
+
+
+def _env_csv_ints(var_name: str) -> Optional[List[int]]:
+    value = os.getenv(var_name)
+    if value is None or not value.strip():
+        return None
+    tokens: List[int] = []
+    for chunk in value.split(","):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        try:
+            tokens.append(int(chunk))
+        except ValueError:
+            continue
+    return tokens

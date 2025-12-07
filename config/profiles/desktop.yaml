@@ -28,6 +28,10 @@ llm:
       model: gpt-4o-mini
       temperature: 0.1
       max_tokens: 400
+  whisper:
+    enabled: false
+    transcript_output_root: "~/.echoforge/transcripts"
+    transcript_public_base_url: null
 
 logging:
   default_level: INFO

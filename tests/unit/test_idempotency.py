@@ -1,12 +1,18 @@
 """Tests for EF-01 idempotency evaluation helpers."""
 
+# Coverage: EF-01, EF-06
+
 from dataclasses import dataclass
+
+import pytest
 
 from backend.app.domain.ef01_capture.idempotency import (
     IdempotencyDecision,
     evaluate_idempotency,
 )
 from backend.app.domain.ef06_entrystore.models import Entry
+
+pytestmark = [pytest.mark.ef01, pytest.mark.ef06]
 
 
 @dataclass

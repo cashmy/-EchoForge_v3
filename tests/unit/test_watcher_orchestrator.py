@@ -1,6 +1,10 @@
 """Tests for the EF-01 watcher orchestrator."""
 
+# Coverage: EF-01, EF-06, INF-02
+
 from datetime import datetime, timezone
+
+import pytest
 
 from backend.app.domain.ef01_capture.idempotency import EntryFingerprintReader
 from backend.app.domain.ef01_capture.watch_folders import (
@@ -13,6 +17,8 @@ from backend.app.domain.ef01_capture.watcher import (
     build_default_watch_profiles,
 )
 from backend.app.domain.ef06_entrystore.models import Entry
+
+pytestmark = [pytest.mark.ef01, pytest.mark.ef06, pytest.mark.inf02]
 
 
 class FakeEntryFingerprintReader(EntryFingerprintReader):

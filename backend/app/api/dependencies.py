@@ -7,7 +7,7 @@ from functools import lru_cache
 from ..domain.ef01_capture.runtime import InfraJobQueueAdapter
 from ..domain.ef06_entrystore.gateway import (
     EntryStoreGateway,
-    InMemoryEntryStoreGateway,
+    build_entry_store_gateway,
 )
 
 __all__ = ["get_entry_gateway", "get_job_enqueuer"]
@@ -15,7 +15,7 @@ __all__ = ["get_entry_gateway", "get_job_enqueuer"]
 
 @lru_cache()
 def _entry_gateway_singleton() -> EntryStoreGateway:
-    return InMemoryEntryStoreGateway()
+    return build_entry_store_gateway()
 
 
 def get_entry_gateway() -> EntryStoreGateway:

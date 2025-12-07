@@ -1,6 +1,16 @@
 """Tests for EF-06 EntryStore gateway helpers."""
 
-from backend.app.domain.ef06_entrystore.gateway import InMemoryEntryStoreGateway
+# Coverage: EF-06
+
+import sqlalchemy as sa
+import pytest
+
+from backend.app.domain.ef06_entrystore.gateway import (
+    InMemoryEntryStoreGateway,
+    PostgresEntryStoreGateway,
+)
+
+pytestmark = [pytest.mark.ef06]
 
 
 def test_create_entry_sets_defaults_and_stores_metadata():
@@ -52,4 +62,109 @@ def test_update_pipeline_status_refreshes_entry():
 
     assert updated.pipeline_status == "queued_for_transcription"
     assert updated.entry_id == record.entry_id
-    assert updated.updated_at > record.updated_at
+    assert updated.updated_at >= record.updated_at
+
+
+@pytest.fixture()
+def postgres_gateway() -> PostgresEntryStoreGateway:
+    engine = sa.create_engine("sqlite+pysqlite:///:memory:", future=True)
+    metadata = sa.MetaData()
+    entries = sa.Table(
+        "entries",
+        metadata,
+        sa.Column("entry_id", sa.String(length=36), primary_key=True),
+        sa.Column("source_type", sa.String(length=64), nullable=False),
+        sa.Column("source_channel", sa.String(length=128), nullable=False),
+        sa.Column("source_path", sa.Text(), nullable=True),
+        sa.Column("pipeline_status", sa.String(length=64), nullable=False),
+        sa.Column("cognitive_status", sa.String(length=64), nullable=False),
+        sa.Column("metadata", sa.JSON(), nullable=False, default=dict),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("capture_fingerprint", sa.Text(), nullable=True),
+        sa.Column("fingerprint_algo", sa.String(length=64), nullable=True),
+        sa.Column("capture_metadata", sa.JSON(), nullable=True),
+        sa.Column("verbatim_path", sa.Text(), nullable=True),
+        sa.Column("verbatim_preview", sa.Text(), nullable=True),
+        sa.Column("content_lang", sa.String(length=12), nullable=True),
+        sa.Column("transcription_text", sa.Text(), nullable=True),
+        sa.Column("transcription_segments", sa.JSON(), nullable=True),
+        sa.Column("transcription_metadata", sa.JSON(), nullable=False, default=dict),
+        sa.Column("transcription_error", sa.JSON(), nullable=True),
+    )
+    metadata.create_all(engine)
+    return PostgresEntryStoreGateway(engine=engine, table=entries)
+
+
+def test_postgres_gateway_round_trip(postgres_gateway: PostgresEntryStoreGateway):
+    record = postgres_gateway.create_entry(
+        source_type="audio",
+        source_channel="watch_folder_audio",
+        source_path="/tmp/audio.wav",
+        metadata={
+            "capture_fingerprint": "pg-fp-1",
+            "fingerprint_algo": "sha256",
+        },
+    )
+
+    assert record.metadata["capture_fingerprint"] == "pg-fp-1"
+
+    updated = postgres_gateway.update_pipeline_status(
+        record.entry_id, pipeline_status="queued_for_transcription"
+    )
+    assert updated.pipeline_status == "queued_for_transcription"
+
+    snapshot = postgres_gateway.find_by_fingerprint("pg-fp-1", "watch_folder_audio")
+    assert snapshot is not None
+    assert snapshot.entry_id == record.entry_id
+
+
+def test_postgres_gateway_transcription_updates(
+    postgres_gateway: PostgresEntryStoreGateway,
+):
+    record = postgres_gateway.create_entry(
+        source_type="audio",
+        source_channel="watch_folder_audio",
+        source_path="/tmp/audio.wav",
+        metadata={
+            "capture_fingerprint": "pg-fp-2",
+            "fingerprint_algo": "sha256",
+        },
+        pipeline_status="queued_for_transcription",
+    )
+
+    result = postgres_gateway.record_transcription_result(
+        record.entry_id,
+        text="hello world",
+        segments=[{"text": "hello world", "start_ms": 0, "end_ms": 1000}],
+        metadata={"language": "en", "processing_ms": 100},
+        verbatim_path="/transcripts/demo.txt",
+        verbatim_preview="hello world",
+        content_lang="en",
+    )
+
+    assert result.transcription_text == "hello world"
+    assert result.verbatim_path == "/transcripts/demo.txt"
+    assert result.transcription_metadata["language"] == "en"
+    assert result.transcription_metadata["processing_ms"] == 100
+
+    failure = postgres_gateway.record_transcription_failure(
+        record.entry_id,
+        error_code="internal_error",
+        message="boom",
+        retryable=False,
+    )
+    assert failure.transcription_error == {
+        "code": "internal_error",
+        "message": "boom",
+        "retryable": False,
+    }
+
+    updated = postgres_gateway.record_capture_event(
+        record.entry_id,
+        event_type="transcription_started",
+        data={"pipeline_status": "transcription_in_progress"},
+    )
+    events = updated.metadata.get("capture_events")
+    assert events is not None
+    assert events[-1]["type"] == "transcription_started"

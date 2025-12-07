@@ -1,6 +1,10 @@
 """Tests for EF-07 /capture endpoint flows."""
 
+# Coverage: EF-07, EF-06, INF-02
+
 import hashlib
+
+import pytest
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -9,6 +13,8 @@ from backend.app.api.dependencies import get_entry_gateway, get_job_enqueuer
 from backend.app.api.routers import capture
 from backend.app.domain.ef01_capture.fingerprint import compute_file_fingerprint
 from backend.app.domain.ef06_entrystore.gateway import InMemoryEntryStoreGateway
+
+pytestmark = [pytest.mark.ef07, pytest.mark.ef06, pytest.mark.inf02]
 
 
 class RecordingJobAdapter:

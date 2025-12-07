@@ -11,3 +11,7 @@ This repository contains the EchoForge v3 desktop experience, composed of:
 - `tests/`: End-to-end and desktop smoke harnesses.
 
 Use the per-folder READMEs for focused workflows. Consult `pm/milestone_tasks/` for milestone-aligned tasks before extending the scaffold.
+
+## Whisper Configuration
+
+The INF-04 transcription gateway ships disabled by default. Copy `.env.example` to `.env` and set `ECHOFORGE_WHISPER_ENABLED=1` when you want the backend to load the local faster-whisper model instead of the stub. All tuneable knobs (model id, device/compute type, decoding hyper-parameters, and VAD settings) are exposed as `ECHOFORGE_WHISPER_*` variables in `.env.example`; adjust them per deployment requirements. Leave the block untouched (or set `ENABLED=0`) when the target environment does not have GPU resources so the gateway will continue to short-circuit safely.

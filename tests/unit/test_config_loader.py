@@ -1,6 +1,14 @@
+"""Tests for INF-01 config loader behavior."""
+
+# Coverage: INF-01
+
 from __future__ import annotations
 
+import pytest
+
 from backend.app.config import load_settings
+
+pytestmark = [pytest.mark.inf01]
 
 
 def test_load_settings_falls_back_to_defaults(monkeypatch, tmp_path):

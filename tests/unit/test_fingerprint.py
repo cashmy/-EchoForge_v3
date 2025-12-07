@@ -1,11 +1,17 @@
 """Tests for EF-01 fingerprint helpers."""
 
+# Coverage: EF-01
+
 import time
+
+import pytest
 
 from backend.app.domain.ef01_capture.fingerprint import (
     DEFAULT_FILE_FINGERPRINT_ALGO,
     compute_file_fingerprint,
 )
+
+pytestmark = [pytest.mark.ef01]
 
 
 def test_compute_file_fingerprint_is_deterministic(tmp_path):

@@ -53,6 +53,7 @@ docker/postgres-data/
 docker/pgdata/
 scripts/*.log
 *.local
+watch_roots/
 
 # --- Governance / docs not tracked here ---
 protocols/

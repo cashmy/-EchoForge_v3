@@ -348,6 +348,27 @@ Record in `pm/decisions/`:
 
 ---
 
+### M05-T13 — Surface Whisper & Transcript Settings
+
+- **Type:** implementation  
+- **Depends On:** M05-T03, M05-T04, MI99-T06  
+- **ETS Profiles:** ETS-UX, ETS-UI  
+- **Status Block:**  
+  - **Status:** pending  
+  - **Last Updated:** 2025-12-07 — GPT-5.1-Codex  
+  - **Notes:** Mirrors MI99-T06; ensure the UI milestone delivers this configuration surface.  
+
+**Description:**  
+Add a settings panel (or dashboard card) in the EF-07 desktop UI that reads INF-01 Whisper configuration and displays:
+
+- Whisper enablement state, model, device/compute type.
+- Transcript output root path and public base URL (if configured).
+- Quick validation indicator (e.g., “path reachable” check or link to open folder).
+
+This gives operators immediate visibility into audio pipeline readiness without digging through YAML or logs. Implementation can be lightweight (read-only), but it must live within the core M05 layout so future settings enhancements have a home.
+
+---
+
 ## 4. Exit Criteria
 
 M05 is considered complete when:
