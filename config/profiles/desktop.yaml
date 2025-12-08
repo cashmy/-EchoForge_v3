@@ -77,3 +77,11 @@ echo:
     default_cognitive_status: unreviewed
   archival:
     auto_archive_after_days: 365
+  documents:
+    processed_root: "~/.echoforge/watch/documents/processed"
+    failed_root: "~/.echoforge/watch/documents/failed"
+    segment_cache_root: "~/.echoforge/tmp/extraction_segments"
+    segment_cache_threshold_bytes: 524288
+    preview_limit: 400
+    extraction_output_root: "~/.echoforge/watch/documents/extracted"
+    extraction_public_base_url: null

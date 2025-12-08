@@ -91,6 +91,14 @@ def postgres_gateway() -> PostgresEntryStoreGateway:
         sa.Column("transcription_segments", sa.JSON(), nullable=True),
         sa.Column("transcription_metadata", sa.JSON(), nullable=False, default=dict),
         sa.Column("transcription_error", sa.JSON(), nullable=True),
+        sa.Column("extracted_text", sa.Text(), nullable=True),
+        sa.Column("extraction_segments", sa.JSON(), nullable=True),
+        sa.Column("extraction_metadata", sa.JSON(), nullable=True),
+        sa.Column("extraction_error", sa.JSON(), nullable=True),
+        sa.Column("normalized_text", sa.Text(), nullable=True),
+        sa.Column("normalized_segments", sa.JSON(), nullable=True),
+        sa.Column("normalization_metadata", sa.JSON(), nullable=True),
+        sa.Column("normalization_error", sa.JSON(), nullable=True),
     )
     metadata.create_all(engine)
     return PostgresEntryStoreGateway(engine=engine, table=entries)
@@ -117,6 +125,43 @@ def test_postgres_gateway_round_trip(postgres_gateway: PostgresEntryStoreGateway
     snapshot = postgres_gateway.find_by_fingerprint("pg-fp-1", "watch_folder_audio")
     assert snapshot is not None
     assert snapshot.entry_id == record.entry_id
+
+
+def test_postgres_gateway_normalization_updates(
+    postgres_gateway: PostgresEntryStoreGateway,
+):
+    record = postgres_gateway.create_entry(
+        source_type="audio",
+        source_channel="watch_folder_audio",
+        source_path="/tmp/audio.wav",
+        metadata={
+            "capture_fingerprint": "pg-norm",
+            "fingerprint_algo": "sha256",
+        },
+    )
+
+    success = postgres_gateway.record_normalization_result(
+        record.entry_id,
+        text="hello world",
+        segments=[{"index": 0, "text": "hello world", "char_count": 11}],
+        metadata={"raw_source": "transcription_text", "worker_id": "norm"},
+    )
+
+    assert success.normalized_text == "hello world"
+    assert success.normalized_segments[0]["text"] == "hello world"
+    assert success.normalization_metadata["worker_id"] == "norm"
+
+    failure = postgres_gateway.record_normalization_failure(
+        record.entry_id,
+        error_code="raw_text_missing",
+        message="no text",
+        retryable=False,
+    )
+    assert failure.normalization_error == {
+        "code": "raw_text_missing",
+        "message": "no text",
+        "retryable": False,
+    }
 
 
 def test_postgres_gateway_transcription_updates(
@@ -168,3 +213,54 @@ def test_postgres_gateway_transcription_updates(
     events = updated.metadata.get("capture_events")
     assert events is not None
     assert events[-1]["type"] == "transcription_started"
+
+
+def test_inmemory_merge_capture_metadata_updates_nested():
+    gateway = InMemoryEntryStoreGateway()
+    record = gateway.create_entry(
+        source_type="document",
+        source_channel="watch_documents",
+        source_path="/tmp/doc.pdf",
+        metadata={"capture_fingerprint": "merge-fp", "fingerprint_algo": "sha256"},
+    )
+
+    gateway.merge_capture_metadata(
+        record.entry_id,
+        patch={
+            "ingest_state": "processing_extraction",
+            "document": {"source_mime": "application/pdf"},
+        },
+    )
+
+    updated = gateway.get_entry(record.entry_id)
+    capture_meta = updated.metadata.get("capture_metadata") or {}
+    assert capture_meta.get("ingest_state") == "processing_extraction"
+    assert (capture_meta.get("document") or {}).get("source_mime") == "application/pdf"
+
+
+def test_postgres_merge_capture_metadata_persists_changes(
+    postgres_gateway: PostgresEntryStoreGateway,
+):
+    record = postgres_gateway.create_entry(
+        source_type="document",
+        source_channel="watch_documents",
+        source_path="/tmp/doc.pdf",
+        metadata={
+            "capture_fingerprint": "pg-merge",
+            "fingerprint_algo": "sha256",
+        },
+    )
+
+    postgres_gateway.merge_capture_metadata(
+        record.entry_id,
+        patch={
+            "ingest_state": "processing_extraction",
+            "document": {"source_mime": "application/pdf"},
+        },
+    )
+
+    snapshot = postgres_gateway.find_by_fingerprint("pg-merge", "watch_documents")
+    assert snapshot is not None
+    capture_meta = snapshot.metadata.get("capture_metadata") or {}
+    assert capture_meta.get("ingest_state") == "processing_extraction"
+    assert (capture_meta.get("document") or {}).get("source_mime") == "application/pdf"

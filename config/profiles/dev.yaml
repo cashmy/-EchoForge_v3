@@ -77,3 +77,11 @@ echo:
     default_cognitive_status: unreviewed
   archival:
     auto_archive_after_days: null
+  documents:
+    processed_root: "watch_roots/documents/processed"
+    failed_root: "watch_roots/documents/failed"
+    segment_cache_root: "watch_roots/tmp/extraction_segments"
+    segment_cache_threshold_bytes: 524288
+    preview_limit: 400
+    extraction_output_root: "watch_roots/documents/extracted"
+    extraction_public_base_url: null

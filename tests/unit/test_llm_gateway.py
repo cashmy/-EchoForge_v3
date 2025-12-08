@@ -7,9 +7,13 @@ from __future__ import annotations
 import pytest
 
 from backend.app.infra import llm_gateway
-from backend.app.infra.llm_gateway import whisper_client
+from backend.app.infra.llm_gateway import (
+    PromptSpec,
+    SemanticGatewayError,
+    whisper_client,
+)
 
-pytestmark = [pytest.mark.ef02, pytest.mark.inf04]
+pytestmark = [pytest.mark.ef02, pytest.mark.ef05, pytest.mark.inf04]
 
 
 def test_transcribe_audio_returns_stub_when_disabled(
@@ -147,3 +151,46 @@ def test_transcribe_audio_translates_generic_runtime(
     err = exc_info.value
     assert err.code == "internal_error"
     assert err.retryable is False
+
+
+def test_generate_semantic_response_returns_stub_summary() -> None:
+    prompt = PromptSpec(
+        system="test",
+        user="EchoForge semantics worker brings summaries online.",
+    )
+
+    response = llm_gateway.generate_semantic_response(
+        profile="echo_summary_v1", prompt=prompt
+    )
+
+    assert "EchoForge" in response.summary
+    assert len(response.display_title) <= 120
+    assert "gpt-4o-mini" in response.model_used
+    assert response.tags and all(isinstance(tag, str) for tag in response.tags)
+    assert response.type_label
+    assert response.domain_label
+
+
+def test_generate_semantic_response_rejects_empty_text() -> None:
+    prompt = PromptSpec(system="test", user="   ")
+
+    with pytest.raises(llm_gateway.SemanticGatewayError) as exc_info:
+        llm_gateway.generate_semantic_response(profile="echo_summary_v1", prompt=prompt)
+
+    assert exc_info.value.code == "semantic_prompt_empty"
+
+
+def test_generate_semantic_response_raises_on_invalid_json(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    prompt = PromptSpec(system="test", user="Hello world")
+
+    def _fake_execute(**_: object) -> llm_gateway.LlmResult:
+        return llm_gateway.LlmResult(text="{invalid", model_used="stub:model")
+
+    monkeypatch.setattr(llm_gateway, "_execute_semantic_request", _fake_execute)
+
+    with pytest.raises(SemanticGatewayError) as exc_info:
+        llm_gateway.generate_semantic_response(profile="echo_summary_v1", prompt=prompt)
+
+    assert exc_info.value.code == "semantic_response_invalid_json"

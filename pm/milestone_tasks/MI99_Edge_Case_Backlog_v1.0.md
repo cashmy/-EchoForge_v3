@@ -122,6 +122,56 @@ Codify how EF-02 transcript artifacts under `llm.whisper.transcript_output_root`
 **Description:**  
 Expose current Whisper/transcript settings inside the EF-07 desktop UI so operators can verify model/device, transcript output roots, and public URL mappings without leaving the app. This should land alongside the broader settings shell built in M05; document the UX intent here so it is not deferred post-M05.
 
+### MI99-T07 — Whisper GPU vs CPU Deployment Guidance
+
+- **Type:** documentation / ops  
+- **Depends On:** M02-T02a (Whisper integration), INF-01 config loader  
+- **Status Block:**
+  - **Status:** pending  
+  - **Last Updated:** 2025-12-07 — GPT-5.1-Codex  
+  - **Notes:** Need install/runbooks covering CUDA/cuDNN requirements for GPU nodes plus CPU-only fallback instructions.
+
+**Description:**  
+Produce an install note (MI99) that distinguishes GPU-capable deployments (CUDA + cuDNN pre-reqs, `ECHOFORGE_WHISPER_DEVICE=cuda`) from CPU-only environments (`device=cpu`, smaller models). Include dependency lists, verification steps, and guidance for operators selecting the correct profile so EF-02 transcription does not silently fall back to the stub.
+
+### MI99-T08 — Whisper Segment Artifact Strategy
+
+- **Type:** decision placeholder  
+- **Depends On:** EF-04 chunking plan, M02-T02b transcript externalization  
+- **Status Block:**
+  - **Status:** pending  
+  - **Last Updated:** 2025-12-07 — GPT-5.1-Codex  
+  - **Notes:** Defer choice until EF-04 normalization needs clear guidance on segment access.
+
+**Description:**  
+Evaluate two approaches for handling EF-02 `.segments.json` artifacts now that Whisper emits them by default: (1) add an INF-01 flag `llm.whisper.persist_segments` so deployments can skip writing the file entirely and rely solely on EF-06 `transcription_segments`, or (2) keep writing the file but define a retention/cleanup policy aligned with transcript lifecycles (delete after N days or post-normalization). Decision should be revisited alongside EF-04 implementation so downstream consumers dictate whether local segment caching is worth the storage overhead.
+
+### MI99-T09 — Verbatim Preview Fallback for Long Entries
+
+- **Type:** decision/documentation  
+- **Depends On:** EF-02, EF-03, EF-05 pipeline planning  
+- **Status Block:**
+  - **Status:** pending  
+  - **Last Updated:** 2025-12-07 — GPT-5.1-Codex  
+  - **Notes:** Capture rule that `verbatim_preview` must always contain either the full text (short entries), a truncated slice with ellipsis, or the EF-05 summary.
+
+**Description:**  
+Ensure every entry presents something meaningful even if EF-05 hasn’t produced a summary yet. For short documents/transcripts, `verbatim_preview` mirrors the entire text. For longer ones, EF-02/EF-03 should write the full verbatim file to disk and store a truncated preview (with ellipsis) until EF-05 overwrites it with a summary. This prevents NULL/empty previews and keeps the UI/API consistent across ingestion types.
+
+---
+
+### MI99-T10 — Define EF-03 OCR Fallback Strategy
+
+- **Type:** decision / implementation placeholder  
+- **Depends On:** M02-T04 EF-03 worker readiness, OCR tooling selection (e.g., Tesseract bindings)  
+- **Status Block:**
+  - **Status:** pending  
+  - **Last Updated:** 2025-12-07 — GPT-5.1-Codex  
+  - **Notes:** Tracks the OCR fallback plan requested during M02-T04; blocked here until tooling is decided.  
+
+**Description:**  
+Document and implement the OCR path EF-03 should take when pdfminer detects image-only pages. Tasks include: choosing the OCR engine (likely Tesseract), defining INF-01 knobs (language packs, timeout), specifying error taxonomy interactions (`ocr_required`, `ocr_timeout`), and outlining ETS fixtures for scanned PDFs. Once decisions are captured here, M02-T04 can pull the finalized approach back into the worker.
+
 ---
 
 ## 3. Adding Future Edge-Case Tasks

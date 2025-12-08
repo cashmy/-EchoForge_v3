@@ -168,12 +168,64 @@ Sub tasks (remaining):
 - **Depends On:** M01  
 - **ETS Profiles:** ETS-Pipeline  
 - **Status Block:**
-  - **Status:** pending  
+  - **Status:** done  
   - **Last Updated:** 2025-12-07 — GPT-5.1-Codex  
-  - **Notes:** Pending kickoff; awaiting M02 execution window.  
+  - **Notes:** Contract defined below; worker implementation (T04) can proceed.  
+
 
 **Description:**  
-Define EF-03 inputs/outputs for `.pdf`, `.docx`, `.txt`, ensuring extraction results flow into EF-06 and feed EF-04.
+Define EF-03 inputs/outputs for `.pdf`, `.docx`, `.txt`, `.md` ensuring extraction results flow into EF-06 and feed EF-04.
+
+**Contract Outline:**
+- **Job Type:** `echo.extract_document` (alias `document_extraction`) dispatched via INF-02. Jobs MUST carry the EF-01 `correlation_id` for traceability across INF-03 logs and EF-06 capture events.
+- **Supported Formats:** `.pdf`, `.docx`, `.doc`, `.txt`, `.md`, `.rtf`. Scanned/bitmap PDFs require OCR with the `ocr_mode` flag enabled; workers MUST fail fast with `unsupported_format` when encountering anything outside this list.
+- **Payload Schema:**
+  - `entry_id` *(UUID, required)* — EF-06 row to mutate.
+  - `source_path` *(string, required)* — absolute path under `processing/documents/` (EF-01 ensures staging).
+  - `source_channel` *(string, required)* — watcher / upload origin for logging & retention hooks.
+  - `source_mime` *(enum, required)* — e.g., `application/pdf`, `application/vnd.openxmlformats-officedocument.wordprocessingml.document`.
+  - `fingerprint` *(string, required)* — same capture fingerprint stored during ingestion for idempotency checks.
+  - `page_range` *(string, optional)* — e.g., `"1-5,8"` to limit extraction, defaults to all pages.
+  - `ocr_mode` *(enum: `auto`, `force`, `off`)* — controls OCR fallback for scanned PDFs; default `auto` (detects low text density and flips to OCR).
+  - `retry_count` *(int, optional)* — provided by INF-02 to inform exponential backoff vs. terminal failure.
+  - `llm_profile` *(string, optional)* — reserved for hybrid extractions that need LLM clean-up; defaults to `doc_extract_v1` but MAY be empty when pure parser.
+  - `metadata_overrides` *(JSON, optional)* — per-entry switches (`skip_images`, `max_pages`, `redact_patterns`).
+
+**Execution Requirements:**
+- Worker transitions EF-06 `ingest_state` to `processing_extraction` as soon as the payload is accepted and updates `capture_metadata.capture_events[]` with `extraction_started` (timestamp, worker_id, source path, correlation id).
+- For `.txt/.md`, stream the file directly; for `.docx/.pdf`, use the configured extractor stack (default: `python-docx`, `pdfminer.six`, and `tesseract` when OCR required). All temporary artifacts live under `processing/tmp/<entry_id>/` and MUST be deleted after success/failure.
+- Output MUST include:
+  - `extracted_text` *(string)* — full plain-text body.
+  - `extraction_segments` *(JSON array)* — per-page/per-section objects: `{index, label, text, char_count, bbox?}` to help EF-04 chunk intelligently.
+  - `extraction_metadata` *(JSON)* — `page_count`, `char_count`, `converter`, `ocr_language`, `parse_warnings`, `processing_ms`, `worker_id`.
+- Large documents (>200k chars or >200 pages) MUST chunk writes to disk first, then stream into EF-06 to avoid memory issues; set `extraction_metadata.truncated=true` when enforcing size caps.
+- **No STT/LLM involvement:** EF-03 remains a deterministic document-to-text stage. It MUST NOT invoke Whisper or any other speech-to-text service; likewise, it does not call INF-04. Its sole responsibility is converting existing document bytes into normalized text/preview artifacts. Any LLM usage (summaries, titles, semantic ops) occurs later via EF-05 once EF-03 has populated `extracted_text`.
+
+**EF-06 Updates:**
+- On start: `ingest_state = processing_extraction`, `pipeline_status = 'extraction_in_progress'` (mirrors EF-02 pattern). Worker records the `source_mime` under `capture_metadata.document.mime` if missing.
+- On success: populate `extracted_text`, `extraction_segments` (JSONB), `extraction_metadata`, `content_lang` (if detected/overridden). Move state to `processing_normalization` and set `pipeline_status = 'extraction_complete'`. Generate a ~400-char preview from the start of `extracted_text` when `verbatim_preview` is empty.
+- On failure: set `pipeline_status = 'extraction_failed'`, `ingest_state = failed`, and record `extraction_error_code` + `pipeline_detail`. Workers MUST leave the original file under `failed/documents/` for triage and reference it in `capture_metadata.capture_events[].artifact_path`.
+- All writes occur inside a single transaction so `extracted_text` and `ingest_state` stay coherent per EF06 addendum §4.
+
+**Filesystem & Retention:**
+- INF-01 profiles introduce `documents.processed_root`, `documents.failed_root`, and `documents.segment_cache_root`. The worker relocates inputs to `processed_root` or `failed_root` atomically (rename) after writeback.
+- Segment JSON files (if large) MAY be cached on disk with references stored in `extraction_metadata.segment_cache_path`. Retention defaults: processed files kept 30 days, failed 14 days; values override-able via profile knobs (`documents.retention_days.processed|failed`).
+
+**Error & Retry Semantics:**
+- Canonical error codes: `unsupported_format`, `password_protected`, `ocr_timeout`, `ocr_language_missing`, `doc_corrupted`, `internal_error`. Retryable: `ocr_timeout`, `ocr_language_missing` (once profile updated), INF-04 rate limits (when hybrid LLM clean-up used). Non-retryable errors MUST set `retryable=false` in job result so INF-02 dead-letters immediately.
+- Workers emit structured INF-03 logs with severity `warning` for recoverable retries and `error` for terminal failures, always including `entry_id`, `correlation_id`, `source_path`, and `fingerprint`.
+
+**Timing / SLA Expectations:**
+- Target ≤ 400 ms per PDF page (text-based) and ≤ 1.5 s per OCR page on ShapeA hardware. Maximum wall-clock per job: 4 minutes or `page_count * 2 s`, whichever is greater. Workers MUST heartbeat via INF-02 progress events every 30 seconds when processing long files to avoid watchdog cancellation.
+- After three failed attempts, the job is routed to the `extraction_dead_letter` queue and EF-06 is marked `failed` with `pipeline_detail` referencing the DLQ ID.
+
+**Downstream Notifications & Logging:**
+- On success, enqueue EF-04 job `echo.normalize_entry` with payload `{entry_id, source:'document_extraction', chunk_count=len(extraction_segments), content_lang}` and append an INF-03 `extraction_completed` event (duration, page_count, converter, ocr_used flag).
+- On failure, emit `extraction_failed` and optionally `extraction_file_rolled` when moving the document to the failed root. ETS requires recordings of both events for audit trails.
+
+**Testing / ETS Hooks:**
+- ETS-Pipeline suite must include fixtures for: text-only PDF (multi-page), scanned PDF requiring OCR, docx with embedded images, and large plaintext (>250k chars). Each fixture verifies EF-06 writes, state transitions, file relocation, and INF-03 logs.
+- CI unit tests MUST cover parser selection logic, truncated outputs, and error taxonomy translation; integration smoke test ensures a full job produces a follow-on normalization enqueue.
 
 ---
 
@@ -183,9 +235,9 @@ Define EF-03 inputs/outputs for `.pdf`, `.docx`, `.txt`, ensuring extraction res
 - **Depends On:** M02-T03  
 - **ETS Profiles:** ETS-Pipeline  
 - **Status Block:**
-  - **Status:** pending  
+  - **Status:** done  
   - **Last Updated:** 2025-12-07 — GPT-5.1-Codex  
-  - **Notes:** Pending kickoff; awaiting M02 execution window.  
+  - **Notes:** Segment caching + DOCX/PDF/OCR tests are in; inline truncation + `documents.max_inline_chars` safeguard EF-06 payloads.  
 
 **Description:**  
 Implement document extraction using selected libraries/tools. Populate `extracted_text` in EF-06 and update pipeline state.
@@ -198,9 +250,9 @@ Implement document extraction using selected libraries/tools. Populate `extracte
 - **Depends On:** M02-T01, M02-T03  
 - **ETS Profiles:** ETS-Pipeline  
 - **Status Block:**
-  - **Status:** pending  
+  - **Status:** done  
   - **Last Updated:** 2025-12-07 — GPT-5.1-Codex  
-  - **Notes:** Pending kickoff; awaiting M02 execution window.  
+  - **Notes:** Spec locked in `project_scope/tactical/EF04_NormalizationService_Spec_v1.0.md` (job contract, rules, states, ETS gates).  
 
 **Description:**  
 Define text cleaning, punctuation normalization, paragraph stitching, whitespace collapse, and safety transformations.
@@ -213,9 +265,9 @@ Define text cleaning, punctuation normalization, paragraph stitching, whitespace
 - **Depends On:** M02-T05  
 - **ETS Profiles:** ETS-Pipeline  
 - **Status Block:**
-  - **Status:** pending  
+  - **Status:** done  
   - **Last Updated:** 2025-12-07 — GPT-5.1-Codex  
-  - **Notes:** Pending kickoff; awaiting M02 execution window.  
+  - **Notes:** EF-04 worker, config defaults, and EF-06 gateway/test coverage implemented; verified via `pytest tests/unit/test_entrystore_gateway.py tests/unit/test_extraction_worker.py tests/unit/test_transcription_worker.py tests/unit/test_normalization_worker.py`.  
 
 **Description:**  
 Implement the asynchronous normalization job that produces `normalized_text` fields in EF-06.
@@ -228,12 +280,22 @@ Implement the asynchronous normalization job that produces `normalized_text` fie
 - **Depends On:** INF-04 readiness  
 - **ETS Profiles:** ETS-LLM  
 - **Status Block:**
-  - **Status:** pending  
+  - **Status:** done  
   - **Last Updated:** 2025-12-07 — GPT-5.1-Codex  
-  - **Notes:** Pending kickoff; awaiting M02 execution window.  
+    - **Notes:** INF-04 gateway now returns structured JSON (summary/title/tags/classification), EF-06 persists semantic tags/class labels w/ capture events, and tests/ETS notes cover semantic worker + gateway adapters.  
 
 **Description:**  
 Ensure EF-05 calls the LLM Gateway using stable, spec-defined prompts, returns structured outputs (summary, tags, domain/type inferences if allowed), and handles errors gracefully.
+
+Subtasks: 
+- ✅ Review EF05_GptEntrySemanticService_Spec_v1.0.md, INF04_LlmGateway_Spec_v1.0.md, and the EF-06 spec to confirm the semantic job contract, required fields, and error taxonomy.
+- ✅ Inventory the existing EF-05/semantic worker module (and any INF-04 client stubs) to see what wiring already exists; document required payload schema for the echo.semantic_enrich jobs that normalization now enqueues.
+  - ✅ Flesh out generate_semantic_response (and likely additional helper functions) so INF-04 can accept structured prompt specs, route to the configured echo_summary_v1 / echo_classify_v1 profiles, and return JSON summaries/classifications per EF-05 §3–4.
+  - ✅ Replace the semantic_worker scaffold with real logic: load the Entry via EF-06, decide summary mode (auto/preview/deep per spec thresholds), call the new INF-04 method, persist summary/title/model provenance, and log capture events. Add classification hooks if the job schema eventually needs them.
+  - ✅ Extend the job payload (if required) only after coordinating with EF-05 spec—currently, everything needed is obtainable from EF-06, so no immediate schema change is mandatory. - **_Not Needed_**
+- ✅ Implement the LLM Gateway call path: prompt selection, payload mapping, structured response parsing (summary, tags, domain/type), and retry/backoff handling that respects INF-04 error classes.
+- ✅ Update EF-06 gateway methods to persist semantic outputs and pipeline states, ensuring capture events/logging mirror EF-02/03/04 patterns.
+- ✅ Add targeted unit tests (semantic worker + gateway adapters) plus ETS notes verifying end-to-end LLM requests using mock INF-04 responses.
 
 ---
 

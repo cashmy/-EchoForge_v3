@@ -75,6 +75,29 @@ DEFAULT_WHISPER_CONFIG: Dict[str, Any] = {
     "vad_min_speech": 250,
     "vad_max_silence": 2000,
 }
+DEFAULT_DOCUMENT_CONFIG: Dict[str, Any] = {
+    "processed_root": "watch_roots/documents/processed",
+    "failed_root": "watch_roots/documents/failed",
+    "segment_cache_root": "watch_roots/tmp/extraction_segments",
+    "segment_cache_threshold_bytes": 524288,
+    "preview_limit": 400,
+    "extraction_output_root": "watch_roots/documents/extracted",
+    "extraction_public_base_url": None,
+    "max_inline_chars": 200_000,
+}
+DEFAULT_NORMALIZATION_CONFIG: Dict[str, Any] = {
+    "worker_id": None,
+    "max_input_chars": 600_000,
+    "max_output_chars": 400_000,
+    "remove_timestamps": True,
+    "emit_segments": True,
+    "segment_threshold_chars": 2_000,
+    "preserve_markdown": False,
+    "sentence_case_all_caps": True,
+    "timeout_ms": 120_000,
+    "default_profile": "standard",
+    "profiles": {},
+}
 
 DEFAULT_PROFILE_DICT: dict[str, Any] = {
     "environment": DEFAULT_ENVIRONMENT,
@@ -176,6 +199,12 @@ def load_settings(
     whisper_cfg = _build_whisper_config(llm_cfg.get("whisper"))
     llm_cfg["whisper"] = whisper_cfg
 
+    echo_cfg = copy.deepcopy(config_data.get("echo", {}))
+    echo_cfg["documents"] = _build_documents_config(echo_cfg.get("documents"))
+    echo_cfg["normalization"] = _build_normalization_config(
+        echo_cfg.get("normalization")
+    )
+
     settings = Settings(
         environment=environment,
         runtime_shape=runtime_shape,
@@ -184,7 +213,7 @@ def load_settings(
         jobqueue=config_data.get("jobqueue", {}),
         llm=llm_cfg,
         logging=config_data.get("logging", {}),
-        echo=config_data.get("echo", {}),
+        echo=echo_cfg,
         raw=config_data,
     )
     return settings
@@ -301,6 +330,34 @@ def _build_job_queue_profile(
             )
         ),
     )
+
+
+def _build_documents_config(
+    doc_cfg: dict[str, Any] | None,
+) -> Dict[str, Any]:
+    config = copy.deepcopy(DEFAULT_DOCUMENT_CONFIG)
+    if doc_cfg:
+        for key, value in doc_cfg.items():
+            if value is None:
+                continue
+            config[key] = value
+    return config
+
+
+def _build_normalization_config(
+    norm_cfg: dict[str, Any] | None,
+) -> Dict[str, Any]:
+    config = copy.deepcopy(DEFAULT_NORMALIZATION_CONFIG)
+    if norm_cfg:
+        for key, value in norm_cfg.items():
+            if value is None:
+                continue
+            config[key] = value
+    if not config.get("worker_id"):
+        config["worker_id"] = "ef04_normalization::default"
+    if "profiles" not in config or config["profiles"] is None:
+        config["profiles"] = {}
+    return config
 
 
 def _build_whisper_config(
