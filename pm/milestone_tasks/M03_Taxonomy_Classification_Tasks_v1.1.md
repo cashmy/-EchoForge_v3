@@ -31,7 +31,7 @@ Taxonomy is a **soft overlay**: Entries remain meaningful via their own fields e
 
 ## 1. Status Tracking Model
 
-Each task contains a Status Block:
+Every task MUST contain a **Status Block**:
 
 ```markdown
 - **Status:** pending  <!-- pending | in_progress | blocked | deferred | done -->
@@ -39,7 +39,19 @@ Each task contains a Status Block:
 - **Notes:** —
 ```
 
-Codex-LLM MUST only mutate these three fields, unless directed by the human user.
+Codex-LLM MUST only edit these three fields when updating status.  
+For deeper planning, add an optional **Subtasks** section directly beneath the Description:
+
+```markdown
+#### Subtasks
+- [ ] ST01 — Short label (link to detailed plan doc)
+- [ ] ST02 — …
+```
+
+- Use the checklist for governance-visible tracking.  
+- Link each line to a supporting plan/ETS document (`pm/milestone_tasks/M03_Tnn_Subtask_Plan.md`, etc.) where detailed research, test matrices, and notes live.  
+- Keep the milestone file concise; put expanded rationale, research, and test plans in the linked document.
+
 
 ---
 
@@ -80,7 +92,12 @@ Define a flexible schema for the Type table, including fields minimally:
 
 Note in the spec that Types are **advisory**: Entries are not required to reference a Type.
 
-Subtasks:
+#### Subtasks
+- [x] ST01 — Document EntryType columns/constraints in EF06 addendum ([plan](pm/milestone_tasks/M03_T01_Subtask_Plan.md), see `EF06_EntryStore_Addendum_v1.2.md §7`)
+- [ ] ST02 — Specify referential behavior + soft delete semantics (link above)
+- [ ] ST03 — Outline EF-06 migration blueprint for EntryType table + optional seeding
+- [ ] ST04 — Map schema to EF-07 Types API payload/validation rules
+- [ ] ST05 — Capture governance/observability expectations (capture events, decision refs)
 
 
 ---
