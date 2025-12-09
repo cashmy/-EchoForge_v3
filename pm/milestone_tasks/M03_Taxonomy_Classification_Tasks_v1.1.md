@@ -39,7 +39,7 @@ Each task contains a Status Block:
 - **Notes:** —
 ```
 
-Codex-LLM MUST only mutate these three fields.
+Codex-LLM MUST only mutate these three fields, unless directed by the human user.
 
 ---
 
@@ -64,9 +64,9 @@ Codex-LLM MUST only mutate these three fields.
 - **Depends On:** EF-06 v1.2  
 - **ETS Profiles:** ETS-DB  
 - **Status Block:**  
-  - **Status:** pending  
-  - **Last Updated:** —  
-  - **Notes:** —  
+  - **Status:** in_progress  
+  - **Last Updated:** 2025-12-09 — GPT-5.1-Codex  
+  - **Notes:** Subtask/test plan captured in `pm/milestone_tasks/M03_T01_Subtask_Plan.md`; ready to refine schema addendum.  
 
 **Description:**  
 Define a flexible schema for the Type table, including fields minimally:
@@ -79,6 +79,9 @@ Define a flexible schema for the Type table, including fields minimally:
 - `created_at` / `updated_at`  
 
 Note in the spec that Types are **advisory**: Entries are not required to reference a Type.
+
+Subtasks:
+
 
 ---
 
@@ -105,6 +108,8 @@ Define Domain taxonomy similarly:
 Hierarchy is optional and out-of-scope for v1.1 (Domains are flat in this version).
 
 ---
+
+
 
 ### M03-T03 — Extend EF-06 Schema with Taxonomy Reference Fields
 
