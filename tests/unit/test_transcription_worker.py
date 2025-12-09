@@ -11,11 +11,18 @@ import pytest
 
 from backend.app.domain.ef01_capture.watch_folders import WATCH_SUBDIRECTORIES
 from backend.app.domain.ef06_entrystore.gateway import InMemoryEntryStoreGateway
+from backend.app.domain.ef06_entrystore.pipeline_states import PIPELINE_STATUS
 from backend.app.jobs import transcription_worker as worker
 from backend.app.jobs.transcription_worker import (
     LlmGatewayTranscriptionClient,
     TranscriptionError,
     TranscriptionOutput,
+)
+from tests.helpers.logging import (
+    RecordingLogger,
+    assert_extra_contains,
+    assert_extra_has_keys,
+    find_log,
 )
 
 pytestmark = [
@@ -126,7 +133,7 @@ def _create_entry(
             "capture_fingerprint": "fp-123",
             "fingerprint_algo": "sha256",
         },
-        pipeline_status="queued_for_transcription",
+        pipeline_status=PIPELINE_STATUS.QUEUED_FOR_TRANSCRIPTION,
     )
     return record.entry_id
 
@@ -194,11 +201,15 @@ def test_handle_records_transcription_and_enqueues_followup(
     gateway: InMemoryEntryStoreGateway,
     tmp_path,
     transcript_root: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _, processing_path = _create_processing_file(tmp_path)
     entry_id = _create_entry(gateway, source_path=processing_path)
     queue = RecordingJobQueue()
     client = SuccessfulTranscriptionClient(transcript_text="hello world")
+
+    log = RecordingLogger()
+    monkeypatch.setattr(worker, "logger", log)
 
     worker.handle(
         {
@@ -218,7 +229,7 @@ def test_handle_records_transcription_and_enqueues_followup(
 
     record = gateway.get_entry(entry_id)
     assert record.transcription_text == "hello world"
-    assert record.pipeline_status == "transcription_complete"
+    assert record.pipeline_status == PIPELINE_STATUS.TRANSCRIPTION_COMPLETE
     assert record.transcription_metadata["media_type"] == "audio/wav"
     assert record.transcription_metadata["processing_ms"] >= 0
     transcript_path = transcript_root / f"{entry_id}.txt"
@@ -231,7 +242,10 @@ def test_handle_records_transcription_and_enqueues_followup(
     assert segments_path.exists()
     events = record.metadata.get("capture_events")
     assert events is not None
-    assert [event["type"] for event in events] == [
+    stage_events = [
+        event["type"] for event in events if event["type"] != "pipeline_status_changed"
+    ]
+    assert stage_events == [
         "transcription_started",
         "transcription_completed",
         "transcription_file_rolled",
@@ -253,11 +267,42 @@ def test_handle_records_transcription_and_enqueues_followup(
             },
         )
     ]
+    capture_meta = record.metadata.get("capture_metadata") or {}
+    assert capture_meta.get("ingest_state") == "processing_normalization"
+    transcription_meta = capture_meta.get("transcription") or {}
+    assert transcription_meta.get("source_path") == processing_path
+    assert transcription_meta.get("source_channel") == "watch_folder_audio"
+    assert transcription_meta.get("fingerprint") == "fp-123"
+
+    started = find_log(log.records, message="transcription_started", level="info")
+    assert_extra_contains(
+        started,
+        entry_id=entry_id,
+        source_channel="watch_folder_audio",
+        fingerprint="fp-123",
+        correlation_id="corr-001",
+        stage="transcription",
+        pipeline_status=PIPELINE_STATUS.TRANSCRIPTION_IN_PROGRESS,
+    )
+    assert_extra_has_keys(started, ["source_path"])
+
+    completed = find_log(log.records, message="transcription_completed", level="info")
+    assert_extra_contains(
+        completed,
+        entry_id=entry_id,
+        source_channel="watch_folder_audio",
+        correlation_id="corr-001",
+        stage="transcription",
+        pipeline_status=PIPELINE_STATUS.TRANSCRIPTION_COMPLETE,
+    )
+    assert completed["extra"].get("processing_ms") is not None
+    assert completed["extra"].get("segment_count") == 1
 
 
 def test_handle_records_failure_and_reraises(
     gateway: InMemoryEntryStoreGateway,
     tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _, processing_path = _create_processing_file(tmp_path)
     entry_id = _create_entry(gateway, source_path=processing_path)
@@ -275,6 +320,9 @@ def test_handle_records_failure_and_reraises(
         "correlation_id": "corr-002",
     }
 
+    log = RecordingLogger()
+    monkeypatch.setattr(worker, "logger", log)
+
     with pytest.raises(TranscriptionError):
         worker.handle(
             payload,
@@ -284,7 +332,7 @@ def test_handle_records_failure_and_reraises(
         )
 
     record = gateway.get_entry(entry_id)
-    assert record.pipeline_status == "transcription_failed"
+    assert record.pipeline_status == PIPELINE_STATUS.TRANSCRIPTION_FAILED
     assert record.transcription_error == {
         "code": "llm_timeout",
         "message": "llm timeout",
@@ -293,7 +341,10 @@ def test_handle_records_failure_and_reraises(
     assert record.verbatim_path is None
     events = record.metadata.get("capture_events")
     assert events is not None
-    assert [event["type"] for event in events][-2:] == [
+    stage_events = [
+        event["type"] for event in events if event["type"] != "pipeline_status_changed"
+    ]
+    assert stage_events[-2:] == [
         "transcription_failed",
         "transcription_file_rolled",
     ]
@@ -305,6 +356,22 @@ def test_handle_records_failure_and_reraises(
     assert failed_path.exists()
     assert not Path(processing_path).exists()
     assert queue.enqueued_jobs == []
+    capture_meta = record.metadata.get("capture_metadata") or {}
+    assert capture_meta.get("ingest_state") == "failed"
+    last_error = capture_meta.get("last_error") or {}
+    assert last_error.get("stage") == "transcription"
+    assert last_error.get("code") == "llm_timeout"
+
+    failure = find_log(log.records, message="transcription_failed", level="exception")
+    assert_extra_contains(
+        failure,
+        entry_id=entry_id,
+        error_code="llm_timeout",
+        retryable=True,
+        correlation_id="corr-002",
+        stage="transcription",
+        pipeline_status=PIPELINE_STATUS.TRANSCRIPTION_FAILED,
+    )
 
 
 def test_handle_records_failure_on_unexpected_exception(
@@ -336,7 +403,7 @@ def test_handle_records_failure_on_unexpected_exception(
         )
 
     record = gateway.get_entry(entry_id)
-    assert record.pipeline_status == "transcription_failed"
+    assert record.pipeline_status == PIPELINE_STATUS.TRANSCRIPTION_FAILED
     assert record.transcription_error == {
         "code": "internal_error",
         "message": "decoder blew up",
@@ -345,5 +412,13 @@ def test_handle_records_failure_on_unexpected_exception(
     assert record.verbatim_path is None
     events = record.metadata.get("capture_events")
     assert events is not None
-    assert events[-2]["type"] == "transcription_failed"
-    assert events[-1]["type"] == "transcription_file_rolled"
+    stage_events = [
+        event["type"] for event in events if event["type"] != "pipeline_status_changed"
+    ]
+    assert stage_events[-2] == "transcription_failed"
+    assert stage_events[-1] == "transcription_file_rolled"
+    capture_meta = record.metadata.get("capture_metadata") or {}
+    assert capture_meta.get("ingest_state") == "failed"
+    last_error = capture_meta.get("last_error") or {}
+    assert last_error.get("stage") == "transcription"
+    assert last_error.get("code") == "internal_error"

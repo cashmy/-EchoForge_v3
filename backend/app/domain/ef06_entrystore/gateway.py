@@ -10,6 +10,7 @@ from sqlalchemy.engine import Engine
 from ...infra.db import ENGINE
 from ...infra.logging import get_logger
 from .models import Entry, utcnow
+from .pipeline_states import DEFAULT_INGEST_STATE, resolve_next_ingest_state
 
 __all__ = [
     "EntryStoreGateway",
@@ -183,6 +184,7 @@ class InMemoryEntryStoreGateway(EntryStoreGateway, FingerprintReadableGateway):
             cognitive_status=cognitive_status,
             timestamp=utcnow(),
         )
+        record = _bootstrap_capture_metadata(record)
         self._entries[record.entry_id] = record
         self._fingerprint_index[(fingerprint, source_channel)] = record.entry_id
         return record
@@ -199,7 +201,7 @@ class InMemoryEntryStoreGateway(EntryStoreGateway, FingerprintReadableGateway):
         record = self._entries.get(entry_id)
         if record is None:
             raise KeyError(f"Entry {entry_id} not found")
-        updated = record.with_pipeline_status(pipeline_status)
+        updated = _apply_pipeline_transition(record, pipeline_status)
         self._entries[entry_id] = updated
         return updated
 
@@ -440,7 +442,6 @@ class PostgresEntryStoreGateway(EntryStoreGateway, FingerprintReadableGateway):
         if not fingerprint:
             raise ValueError("capture_fingerprint is required for EF-01 ingests")
 
-        capture_meta = metadata_dict.get("capture_metadata")
         timestamp = utcnow()
         entry = Entry.new(
             source_type=source_type,
@@ -451,6 +452,7 @@ class PostgresEntryStoreGateway(EntryStoreGateway, FingerprintReadableGateway):
             cognitive_status=cognitive_status,
             timestamp=timestamp,
         )
+        entry = _bootstrap_capture_metadata(entry)
 
         insert_stmt = (
             insert(self._entries)
@@ -466,7 +468,7 @@ class PostgresEntryStoreGateway(EntryStoreGateway, FingerprintReadableGateway):
                 updated_at=entry.updated_at,
                 capture_fingerprint=fingerprint,
                 fingerprint_algo=metadata_dict.get("fingerprint_algo"),
-                capture_metadata=capture_meta,
+                capture_metadata=entry.metadata.get("capture_metadata"),
                 verbatim_path=entry.verbatim_path,
                 verbatim_preview=entry.verbatim_preview,
                 content_lang=entry.content_lang,
@@ -524,13 +526,23 @@ class PostgresEntryStoreGateway(EntryStoreGateway, FingerprintReadableGateway):
     # Pipeline + transcription updates
     # ------------------------------------------------------------------
     def update_pipeline_status(self, entry_id: str, *, pipeline_status: str) -> Entry:
-        stmt = (
-            update(self._entries)
-            .where(self._entries.c.entry_id == entry_id)
-            .values(pipeline_status=pipeline_status, updated_at=utcnow())
-            .returning(self._entries)
-        )
         with self._engine.begin() as conn:
+            current_row = self._fetch_entry(conn, entry_id)
+            current_entry = _row_to_entry(current_row)
+            updated_entry = _apply_pipeline_transition(current_entry, pipeline_status)
+            if updated_entry is current_entry:
+                return current_entry
+            stmt = (
+                update(self._entries)
+                .where(self._entries.c.entry_id == entry_id)
+                .values(
+                    pipeline_status=updated_entry.pipeline_status,
+                    metadata=updated_entry.metadata,
+                    capture_metadata=updated_entry.metadata.get("capture_metadata"),
+                    updated_at=updated_entry.updated_at,
+                )
+                .returning(self._entries)
+            )
             row = conn.execute(stmt).mappings().first()
         if row is None:
             raise KeyError(f"Entry {entry_id} not found")
@@ -957,3 +969,87 @@ def _row_to_entry(row: Mapping[str, Any]) -> Entry:
         classification_model=row.get("classification_model"),
         is_classified=bool(row.get("is_classified")),
     )
+
+
+PIPELINE_TRANSITION_EVENT = "pipeline_status_changed"
+
+
+def _bootstrap_capture_metadata(record: Entry) -> Entry:
+    capture_meta = record.metadata.get("capture_metadata") or {}
+    if capture_meta.get("ingest_state"):
+        return record
+    try:
+        ingest_state = resolve_next_ingest_state(
+            DEFAULT_INGEST_STATE, record.pipeline_status
+        )
+    except ValueError as exc:  # pragma: no cover - defensive
+        raise ValueError(
+            f"invalid initial pipeline_status '{record.pipeline_status}' for entry {record.entry_id}"
+        ) from exc
+    timestamp = record.updated_at
+    transition_record = {
+        "from_ingest_state": None,
+        "to_ingest_state": ingest_state,
+        "pipeline_status": record.pipeline_status,
+        "previous_pipeline_status": None,
+        "occurred_at": timestamp.isoformat(),
+    }
+    return record.with_capture_metadata(
+        patch={
+            "ingest_state": ingest_state,
+            "pipeline_status": record.pipeline_status,
+            "pipeline_history": [transition_record],
+            "last_transition": transition_record,
+        },
+        timestamp=timestamp,
+    )
+
+
+def _apply_pipeline_transition(record: Entry, pipeline_status: str) -> Entry:
+    current_state = _current_ingest_state(record)
+    try:
+        next_state = resolve_next_ingest_state(current_state, pipeline_status)
+    except ValueError as exc:
+        raise ValueError(
+            f"pipeline_status '{pipeline_status}' not allowed from ingest_state '{current_state}' for entry {record.entry_id}"
+        ) from exc
+
+    if pipeline_status == record.pipeline_status and next_state == current_state:
+        return record
+
+    transition_time = utcnow()
+    capture_meta = record.metadata.get("capture_metadata") or {}
+    history = list(capture_meta.get("pipeline_history") or [])
+    transition_record = {
+        "from_ingest_state": current_state,
+        "to_ingest_state": next_state,
+        "pipeline_status": pipeline_status,
+        "previous_pipeline_status": record.pipeline_status,
+        "occurred_at": transition_time.isoformat(),
+    }
+    history.append(transition_record)
+
+    updated = record.with_pipeline_status(
+        pipeline_status,
+        timestamp=transition_time,
+    )
+    updated = updated.with_capture_metadata(
+        patch={
+            "ingest_state": next_state,
+            "pipeline_status": pipeline_status,
+            "pipeline_history": history,
+            "last_transition": transition_record,
+        },
+        timestamp=transition_time,
+    )
+    updated = updated.with_capture_event(
+        event_type=PIPELINE_TRANSITION_EVENT,
+        data=transition_record,
+        timestamp=transition_time,
+    )
+    return updated
+
+
+def _current_ingest_state(record: Entry) -> str:
+    capture_meta = record.metadata.get("capture_metadata") or {}
+    return capture_meta.get("ingest_state") or DEFAULT_INGEST_STATE

@@ -8,6 +8,7 @@ import shutil
 import tempfile
 import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Protocol, Tuple
 from urllib.parse import urljoin
@@ -15,6 +16,7 @@ from urllib.parse import urljoin
 from backend.app.config import DEFAULT_WHISPER_CONFIG, load_settings
 from backend.app.domain.ef01_capture.watch_folders import WATCH_SUBDIRECTORIES
 from backend.app.domain.ef06_entrystore.gateway import build_entry_store_gateway
+from backend.app.domain.ef06_entrystore.pipeline_states import PIPELINE_STATUS
 from backend.app.infra import jobqueue
 from backend.app.infra.llm_gateway import TranscriptionGatewayError, transcribe_audio
 from backend.app.infra.logging import get_logger
@@ -59,6 +61,13 @@ class EntryTranscriptionStore(Protocol):
         event_type: str,
         data: Optional[Dict[str, Any]] = None,
     ): ...
+
+    def merge_capture_metadata(
+        self,
+        entry_id: str,
+        *,
+        patch: Dict[str, Any],
+    ) -> Any: ...
 
 
 class JobQueueAdapter(Protocol):
@@ -170,19 +179,38 @@ def handle(
             "source_channel": source_channel,
             "fingerprint": fingerprint,
             "correlation_id": correlation_id,
+            "source_path": source_path,
+            "stage": "transcription",
+            "pipeline_status": PIPELINE_STATUS.TRANSCRIPTION_IN_PROGRESS,
         },
     )
     gateway.update_pipeline_status(
-        entry_id, pipeline_status="transcription_in_progress"
+        entry_id,
+        pipeline_status=PIPELINE_STATUS.TRANSCRIPTION_IN_PROGRESS,
     )
     _record_capture_event(
         gateway,
         entry_id,
         event_type="transcription_started",
-        pipeline_status="transcription_in_progress",
+        pipeline_status=PIPELINE_STATUS.TRANSCRIPTION_IN_PROGRESS,
         correlation_id=correlation_id,
         source_channel=source_channel,
         extra={"source_path": source_path},
+    )
+    _merge_capture_metadata_patch(
+        gateway,
+        entry_id,
+        {
+            "transcription": {
+                "source_path": source_path,
+                "source_channel": source_channel,
+                "fingerprint": fingerprint,
+                "profile": profile,
+                "language_hint": language_hint,
+                "media_type": media_type,
+                "started_at": datetime.now(timezone.utc).isoformat(),
+            }
+        },
     )
 
     transcript_file: Optional[Path] = None
@@ -243,6 +271,8 @@ def handle(
     verbatim_preview = _build_verbatim_preview(result.text)
     content_lang = metadata.get("language")
 
+    segment_count = len(result.segments or [])
+
     gateway.record_transcription_result(
         entry_id,
         text=result.text,
@@ -252,17 +282,36 @@ def handle(
         verbatim_preview=verbatim_preview,
         content_lang=content_lang,
     )
-    gateway.update_pipeline_status(entry_id, pipeline_status="transcription_complete")
+    gateway.update_pipeline_status(
+        entry_id,
+        pipeline_status=PIPELINE_STATUS.TRANSCRIPTION_COMPLETE,
+    )
     _record_capture_event(
         gateway,
         entry_id,
         event_type="transcription_completed",
-        pipeline_status="transcription_complete",
+        pipeline_status=PIPELINE_STATUS.TRANSCRIPTION_COMPLETE,
         correlation_id=correlation_id,
         source_channel=source_channel,
         extra={
             "processing_ms": processing_ms,
-            "segment_count": len(result.segments or []),
+            "segment_count": segment_count,
+        },
+    )
+    _merge_capture_metadata_patch(
+        gateway,
+        entry_id,
+        {
+            "transcription": {
+                "processed_at": datetime.now(timezone.utc).isoformat(),
+                "processing_ms": processing_ms,
+                "segment_count": len(result.segments or []),
+                "transcript_file_path": str(transcript_file)
+                if transcript_file
+                else None,
+                "segments_file_path": str(segments_file) if segments_file else None,
+                "content_lang": content_lang,
+            }
         },
     )
 
@@ -277,7 +326,7 @@ def handle(
             gateway,
             entry_id,
             event_type="transcription_file_rolled",
-            pipeline_status="transcription_complete",
+            pipeline_status=PIPELINE_STATUS.TRANSCRIPTION_COMPLETE,
             correlation_id=correlation_id,
             source_channel=source_channel,
             extra={
@@ -300,6 +349,10 @@ def handle(
             "entry_id": entry_id,
             "source_channel": source_channel,
             "correlation_id": correlation_id,
+            "processing_ms": processing_ms,
+            "segment_count": segment_count,
+            "stage": "transcription",
+            "pipeline_status": PIPELINE_STATUS.TRANSCRIPTION_COMPLETE,
         },
     )
 
@@ -322,12 +375,15 @@ def _handle_failure(
         message=message,
         retryable=retryable,
     )
-    gateway.update_pipeline_status(entry_id, pipeline_status="transcription_failed")
+    gateway.update_pipeline_status(
+        entry_id,
+        pipeline_status=PIPELINE_STATUS.TRANSCRIPTION_FAILED,
+    )
     _record_capture_event(
         gateway,
         entry_id,
         event_type="transcription_failed",
-        pipeline_status="transcription_failed",
+        pipeline_status=PIPELINE_STATUS.TRANSCRIPTION_FAILED,
         correlation_id=correlation_id,
         source_channel=source_channel,
         extra={
@@ -347,7 +403,7 @@ def _handle_failure(
             gateway,
             entry_id,
             event_type="transcription_file_rolled",
-            pipeline_status="transcription_failed",
+            pipeline_status=PIPELINE_STATUS.TRANSCRIPTION_FAILED,
             correlation_id=correlation_id,
             source_channel=source_channel,
             extra={
@@ -363,6 +419,20 @@ def _handle_failure(
             "retryable": retryable,
             "correlation_id": correlation_id,
             "source_channel": source_channel,
+            "stage": "transcription",
+            "pipeline_status": PIPELINE_STATUS.TRANSCRIPTION_FAILED,
+            "processing_ms": processing_ms,
+        },
+    )
+    _merge_capture_metadata_patch(
+        gateway,
+        entry_id,
+        {
+            "last_error": {
+                "stage": "transcription",
+                "code": error_code,
+                "retryable": retryable,
+            }
         },
     )
 
@@ -485,6 +555,27 @@ def _record_capture_event(
         logger.debug(
             "capture_event_not_supported",
             extra={"entry_id": entry_id, "event_type": event_type},
+        )
+
+
+def _merge_capture_metadata_patch(
+    gateway: EntryTranscriptionStore,
+    entry_id: str,
+    patch: Optional[Dict[str, Any]],
+) -> None:
+    if not patch:
+        return
+    try:
+        gateway.merge_capture_metadata(entry_id, patch=patch)
+    except AttributeError:
+        logger.debug(
+            "capture_metadata_merge_not_supported",
+            extra={"entry_id": entry_id},
+        )
+    except Exception:  # pragma: no cover - defensive
+        logger.exception(
+            "capture_metadata_merge_failed",
+            extra={"entry_id": entry_id},
         )
 
 

@@ -174,6 +174,26 @@ Document and implement the OCR path EF-03 should take when pdfminer detects imag
 
 ---
 
+### MI99-T11 — EF-05 Semantic Enhancements (Nice-to-have)
+
+- **Type:** implementation / telemetry polish  
+- **Depends On:** M02-T09 semantic worker rollout  
+- **Status Block:**
+  - **Status:** pending  
+  - **Last Updated:** 2025-12-08 — GPT-5.1-Codex  
+  - **Notes:** Nice-to-have backlog item captured per 2025-12-08 discussion; not blocking M02 delivery.  
+
+**Description:**  
+Optional follow-ups for the EF-05 semantic worker once the must-do features are stable:
+
+1. Inject canonical `type_labels` / `domain_labels` vocab lists into the `classify_v1` prompt and surface suggested labels without persisting them automatically.  
+2. Extend INF-04 response handling to persist summary/classification confidence values into dedicated EF-06 columns (or capture metadata until schema lands).  
+3. Wire additional INF-04 routing hints (temperature overrides, user model overrides) so operators can steer semantic runs without code changes.  
+
+These refinements improve long-term usability but are explicitly marked **Nice-to-have** so they can be scheduled after the current milestone cut. 
+
+---
+
 ## 3. Adding Future Edge-Case Tasks
 
 New edge items can be appended as `MI99-T0x` entries with the same Status Block structure. Reference any upstream decision or spec change so the history of why the item exists remains clear.

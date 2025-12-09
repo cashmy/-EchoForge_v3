@@ -10,7 +10,14 @@ import pytest
 from backend.app.domain.ef01_capture.watch_folders import WATCH_SUBDIRECTORIES
 from backend.app.domain.ef03_extraction import DocumentExtractionError
 from backend.app.domain.ef06_entrystore.gateway import InMemoryEntryStoreGateway
+from backend.app.domain.ef06_entrystore.pipeline_states import PIPELINE_STATUS
 from backend.app.jobs import extraction_worker as worker
+from tests.helpers.logging import (
+    RecordingLogger,
+    assert_extra_contains,
+    assert_extra_has_keys,
+    find_log,
+)
 
 pytestmark = [pytest.mark.ef03, pytest.mark.ef06, pytest.mark.inf02]
 
@@ -59,7 +66,7 @@ def _create_entry(
             "capture_fingerprint": "fp-001",
             "fingerprint_algo": "sha256",
         },
-        pipeline_status="queued_for_extraction",
+        pipeline_status=PIPELINE_STATUS.QUEUED_FOR_EXTRACTION,
     )
     return record.entry_id
 
@@ -81,10 +88,13 @@ def _create_processing_file(
 def test_handle_extracts_plain_text_and_enqueues_followup(
     gateway: InMemoryEntryStoreGateway,
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     processing_path = _create_processing_file(tmp_path)
     entry_id = _create_entry(gateway, source_path=processing_path)
     queue = RecordingJobQueue()
+    log = RecordingLogger()
+    monkeypatch.setattr(worker, "logger", log)
 
     worker.handle(
         {
@@ -102,7 +112,7 @@ def test_handle_extracts_plain_text_and_enqueues_followup(
 
     record = gateway.get_entry(entry_id)
     assert record.extracted_text.startswith("Hello world")
-    assert record.pipeline_status == "extraction_complete"
+    assert record.pipeline_status == PIPELINE_STATUS.EXTRACTION_COMPLETE
     assert record.extraction_metadata["converter"] == "plain_text"
     verbatim_file = Path(worker._EXTRACTION_OUTPUT_ROOT) / f"{entry_id}.txt"
     assert verbatim_file.exists()
@@ -135,6 +145,29 @@ def test_handle_extracts_plain_text_and_enqueues_followup(
             },
         )
     ]
+
+    started = find_log(log.records, message="extraction_started", level="info")
+    assert_extra_contains(
+        started,
+        entry_id=entry_id,
+        source_channel="watch_documents",
+        stage="extraction",
+        pipeline_status=PIPELINE_STATUS.EXTRACTION_IN_PROGRESS,
+        correlation_id="corr-doc-1",
+    )
+    assert_extra_has_keys(started, ["source_path", "source_mime", "fingerprint"])
+
+    completed = find_log(log.records, message="extraction_completed", level="info")
+    assert_extra_contains(
+        completed,
+        entry_id=entry_id,
+        source_channel="watch_documents",
+        stage="extraction",
+        pipeline_status=PIPELINE_STATUS.EXTRACTION_COMPLETE,
+        correlation_id="corr-doc-1",
+    )
+    assert completed["extra"].get("processing_ms") is not None
+    assert completed["extra"].get("segment_count") == segment_count
 
 
 def test_handle_caches_large_segments_when_threshold_exceeded(
@@ -266,6 +299,8 @@ def test_handle_records_failure_on_document_error(
         )
 
     monkeypatch.setattr(worker, "extract_document", _raise_doc_error)
+    log = RecordingLogger()
+    monkeypatch.setattr(worker, "logger", log)
 
     with pytest.raises(DocumentExtractionError):
         worker.handle(
@@ -283,7 +318,7 @@ def test_handle_records_failure_on_document_error(
         )
 
     record = gateway.get_entry(entry_id)
-    assert record.pipeline_status == "extraction_failed"
+    assert record.pipeline_status == PIPELINE_STATUS.EXTRACTION_FAILED
     assert record.extraction_error == {
         "code": "ocr_required",
         "message": "ocr required",
@@ -301,6 +336,17 @@ def test_handle_records_failure_on_document_error(
     assert failed_path.exists()
     assert failure_doc.get("failed_path") == str(failed_path)
     assert queue.enqueued_jobs == []
+
+    failure = find_log(log.records, message="extraction_failed", level="exception")
+    assert_extra_contains(
+        failure,
+        entry_id=entry_id,
+        error_code="ocr_required",
+        retryable=True,
+        correlation_id="corr-doc-2",
+        stage="extraction",
+        pipeline_status=PIPELINE_STATUS.EXTRACTION_FAILED,
+    )
 
 
 def test_handle_records_failure_on_unexpected_exception(
@@ -333,7 +379,7 @@ def test_handle_records_failure_on_unexpected_exception(
         )
 
     record = gateway.get_entry(entry_id)
-    assert record.pipeline_status == "extraction_failed"
+    assert record.pipeline_status == PIPELINE_STATUS.EXTRACTION_FAILED
     assert record.extraction_error == {
         "code": "internal_error",
         "message": "boom",

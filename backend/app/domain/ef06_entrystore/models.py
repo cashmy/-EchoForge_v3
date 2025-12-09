@@ -330,6 +330,9 @@ class Entry:
         semantic_tags: Optional[List[str]] = None,
         timestamp: Optional[datetime] = None,
     ) -> "Entry":
+        preview_value = self.verbatim_preview
+        if (preview_value is None or preview_value == "") and summary:
+            preview_value = summary[:400]
         return replace(
             self,
             summary=summary,
@@ -338,6 +341,7 @@ class Entry:
             semantic_tags=list(semantic_tags)
             if semantic_tags is not None
             else self.semantic_tags,
+            verbatim_preview=preview_value,
             updated_at=timestamp or utcnow(),
         )
 

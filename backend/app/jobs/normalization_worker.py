@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional, Protocol, Tuple
 
 from backend.app.config import load_settings
 from backend.app.domain.ef06_entrystore.gateway import build_entry_store_gateway
+from backend.app.domain.ef06_entrystore.pipeline_states import PIPELINE_STATUS
 from backend.app.infra import jobqueue
 from backend.app.infra.logging import get_logger
 
@@ -126,25 +127,33 @@ def handle(
     content_lang_override = payload.get("content_lang")
     chunk_count_hint = payload.get("chunk_count")
     profile_override = payload.get("normalization_profile")
+    profile_name, profile_config = _resolve_profile(profile_override)
     overrides = (
         payload.get("overrides") if isinstance(payload.get("overrides"), dict) else {}
     )
 
     gateway.update_pipeline_status(
-        entry_id, pipeline_status="normalization_in_progress"
+        entry_id,
+        pipeline_status=PIPELINE_STATUS.NORMALIZATION_IN_PROGRESS,
     )
     _record_capture_event(
         gateway,
         entry_id,
         event_type="normalization_started",
-        pipeline_status="normalization_in_progress",
+        pipeline_status=PIPELINE_STATUS.NORMALIZATION_IN_PROGRESS,
         correlation_id=correlation_id,
         extra={"source": source, "profile": profile_override or _DEFAULT_PROFILE},
     )
-    _merge_capture_metadata_patch(
-        gateway,
-        entry_id,
-        {"ingest_state": "processing_normalization"},
+    logger.info(
+        "normalization_started",
+        extra={
+            "entry_id": entry_id,
+            "source": source,
+            "profile": profile_name,
+            "correlation_id": correlation_id,
+            "stage": "normalization",
+            "pipeline_status": PIPELINE_STATUS.NORMALIZATION_IN_PROGRESS,
+        },
     )
 
     entry = gateway.get_entry(entry_id)
@@ -169,7 +178,6 @@ def handle(
         )
         raise error
 
-    profile_name, profile_config = _resolve_profile(profile_override)
     effective_config = dict(profile_config)
     for key, value in overrides.items():
         if value is None:
@@ -218,13 +226,16 @@ def handle(
         segments=segments,
         metadata=norm_meta,
     )
-    gateway.update_pipeline_status(entry_id, pipeline_status="normalization_complete")
-    segment_count = len(segments or [])
+    gateway.update_pipeline_status(
+        entry_id,
+        pipeline_status=PIPELINE_STATUS.NORMALIZATION_COMPLETE,
+    )
+    segment_count = len(segments or []) or 1
     _record_capture_event(
         gateway,
         entry_id,
         event_type="normalization_completed",
-        pipeline_status="normalization_complete",
+        pipeline_status=PIPELINE_STATUS.NORMALIZATION_COMPLETE,
         correlation_id=correlation_id,
         extra={
             "normalized_char_count": len(normalized_text),
@@ -236,13 +247,24 @@ def handle(
         gateway,
         entry_id,
         {
-            "ingest_state": "processing_semantics",
             "normalization": {
                 "processed_at": datetime.now(timezone.utc).isoformat(),
                 "normalized_char_count": len(normalized_text),
                 "segment_count": segment_count,
                 "profile": profile_name,
             },
+        },
+    )
+    logger.info(
+        "normalization_completed",
+        extra={
+            "entry_id": entry_id,
+            "correlation_id": correlation_id,
+            "stage": "normalization",
+            "pipeline_status": PIPELINE_STATUS.NORMALIZATION_COMPLETE,
+            "normalized_char_count": len(normalized_text),
+            "segment_count": segment_count,
+            "profile": profile_name,
         },
     )
 
@@ -273,12 +295,15 @@ def _handle_failure(
         message=str(error),
         retryable=error.retryable,
     )
-    gateway.update_pipeline_status(entry_id, pipeline_status="normalization_failed")
+    gateway.update_pipeline_status(
+        entry_id,
+        pipeline_status=PIPELINE_STATUS.NORMALIZATION_FAILED,
+    )
     _record_capture_event(
         gateway,
         entry_id,
         event_type="normalization_failed",
-        pipeline_status="normalization_failed",
+        pipeline_status=PIPELINE_STATUS.NORMALIZATION_FAILED,
         correlation_id=correlation_id,
         extra={
             "error_code": error.code,
@@ -290,12 +315,23 @@ def _handle_failure(
         gateway,
         entry_id,
         {
-            "ingest_state": "failed",
             "last_error": {
                 "stage": "normalization",
                 "code": error.code,
                 "retryable": error.retryable,
             },
+        },
+    )
+    logger.error(
+        "normalization_failed",
+        extra={
+            "entry_id": entry_id,
+            "error_code": error.code,
+            "retryable": error.retryable,
+            "source": source,
+            "correlation_id": correlation_id,
+            "stage": "normalization",
+            "pipeline_status": PIPELINE_STATUS.NORMALIZATION_FAILED,
         },
     )
 

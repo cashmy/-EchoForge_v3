@@ -27,6 +27,11 @@ def test_create_entry_sets_defaults_and_stores_metadata():
     assert record.cognitive_status == "unreviewed"
     assert record.metadata["capture_fingerprint"] == "abc"
     assert record.created_at.tzinfo is not None
+    capture_meta = record.metadata.get("capture_metadata") or {}
+    assert capture_meta.get("ingest_state") == "captured"
+    assert capture_meta.get("pipeline_status") == "ingested"
+    history = capture_meta.get("pipeline_history") or []
+    assert history[0]["pipeline_status"] == "ingested"
 
 
 def test_find_by_fingerprint_returns_snapshot():
@@ -36,17 +41,17 @@ def test_find_by_fingerprint_returns_snapshot():
         source_channel="watch_folder_audio",
         source_path="/tmp/file.wav",
         metadata={"capture_fingerprint": "abc", "fingerprint_algo": "sha256"},
-        pipeline_status="processing",
+        pipeline_status="queued_for_transcription",
     )
 
     snapshot = gateway.find_by_fingerprint("abc", "watch_folder_audio")
 
     assert snapshot is not None
     assert snapshot.entry_id == record.entry_id
-    assert snapshot.pipeline_status == "processing"
+    assert snapshot.pipeline_status == "queued_for_transcription"
 
 
-def test_update_pipeline_status_refreshes_entry():
+def test_update_pipeline_status_tracks_ingest_state_and_events():
     gateway = InMemoryEntryStoreGateway()
     record = gateway.create_entry(
         source_type="audio",
@@ -56,13 +61,57 @@ def test_update_pipeline_status_refreshes_entry():
         pipeline_status="captured",
     )
 
-    updated = gateway.update_pipeline_status(
+    queued = gateway.update_pipeline_status(
         record.entry_id, pipeline_status="queued_for_transcription"
     )
+    capture_meta = queued.metadata.get("capture_metadata") or {}
+    assert queued.pipeline_status == "queued_for_transcription"
+    assert capture_meta.get("ingest_state") == "queued_for_transcription"
+    assert (
+        queued.metadata.get("capture_events")[-1]["type"] == "pipeline_status_changed"
+    )
 
-    assert updated.pipeline_status == "queued_for_transcription"
-    assert updated.entry_id == record.entry_id
-    assert updated.updated_at >= record.updated_at
+    in_progress = gateway.update_pipeline_status(
+        record.entry_id, pipeline_status="transcription_in_progress"
+    )
+    capture_meta = in_progress.metadata.get("capture_metadata") or {}
+    assert capture_meta.get("ingest_state") == "processing_transcription"
+    history = capture_meta.get("pipeline_history") or []
+    assert history[-1]["pipeline_status"] == "transcription_in_progress"
+    assert (
+        in_progress.metadata.get("capture_events")[-1]["data"]["to_ingest_state"]
+        == "processing_transcription"
+    )
+
+    normalization_ready = gateway.update_pipeline_status(
+        record.entry_id, pipeline_status="transcription_complete"
+    )
+    capture_meta = normalization_ready.metadata.get("capture_metadata") or {}
+    assert capture_meta.get("ingest_state") == "processing_normalization"
+    assert (
+        normalization_ready.metadata.get("capture_events")[-1]["data"][
+            "pipeline_status"
+        ]
+        == "transcription_complete"
+    )
+    assert normalization_ready.entry_id == record.entry_id
+    assert normalization_ready.updated_at >= in_progress.updated_at
+
+
+def test_update_pipeline_status_rejects_invalid_jump():
+    gateway = InMemoryEntryStoreGateway()
+    record = gateway.create_entry(
+        source_type="audio",
+        source_channel="watch_folder_audio",
+        source_path="/tmp/file.wav",
+        metadata={"capture_fingerprint": "abc"},
+        pipeline_status="captured",
+    )
+
+    with pytest.raises(ValueError):
+        gateway.update_pipeline_status(
+            record.entry_id, pipeline_status="semantic_in_progress"
+        )
 
 
 @pytest.fixture()
@@ -99,6 +148,14 @@ def postgres_gateway() -> PostgresEntryStoreGateway:
         sa.Column("normalized_segments", sa.JSON(), nullable=True),
         sa.Column("normalization_metadata", sa.JSON(), nullable=True),
         sa.Column("normalization_error", sa.JSON(), nullable=True),
+        sa.Column("summary", sa.Text(), nullable=True),
+        sa.Column("display_title", sa.Text(), nullable=True),
+        sa.Column("summary_model", sa.String(length=128), nullable=True),
+        sa.Column("semantic_tags", sa.JSON(), nullable=True),
+        sa.Column("type_label", sa.String(length=128), nullable=True),
+        sa.Column("domain_label", sa.String(length=128), nullable=True),
+        sa.Column("classification_model", sa.String(length=128), nullable=True),
+        sa.Column("is_classified", sa.Boolean(), nullable=False, default=False),
     )
     metadata.create_all(engine)
     return PostgresEntryStoreGateway(engine=engine, table=entries)
@@ -125,6 +182,35 @@ def test_postgres_gateway_round_trip(postgres_gateway: PostgresEntryStoreGateway
     snapshot = postgres_gateway.find_by_fingerprint("pg-fp-1", "watch_folder_audio")
     assert snapshot is not None
     assert snapshot.entry_id == record.entry_id
+
+
+def test_postgres_pipeline_transition_persists_capture_metadata(
+    postgres_gateway: PostgresEntryStoreGateway,
+):
+    record = postgres_gateway.create_entry(
+        source_type="audio",
+        source_channel="watch_folder_audio",
+        source_path="/tmp/audio.wav",
+        metadata={
+            "capture_fingerprint": "pg-transition",
+            "fingerprint_algo": "sha256",
+        },
+    )
+
+    updated = postgres_gateway.update_pipeline_status(
+        record.entry_id, pipeline_status="queued_for_transcription"
+    )
+    capture_meta = updated.metadata.get("capture_metadata") or {}
+    assert capture_meta.get("ingest_state") == "queued_for_transcription"
+    events = updated.metadata.get("capture_events") or []
+    assert events[-1]["type"] == "pipeline_status_changed"
+
+    snapshot = postgres_gateway.get_entry(record.entry_id)
+    capture_meta = snapshot.metadata.get("capture_metadata") or {}
+    assert capture_meta.get("ingest_state") == "queued_for_transcription"
+    assert (snapshot.metadata.get("capture_events") or [])[-1][
+        "type"
+    ] == "pipeline_status_changed"
 
 
 def test_postgres_gateway_normalization_updates(

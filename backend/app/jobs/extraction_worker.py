@@ -19,6 +19,7 @@ from backend.app.domain.ef03_extraction import (
     extract_document,
 )
 from backend.app.domain.ef06_entrystore.gateway import build_entry_store_gateway
+from backend.app.domain.ef06_entrystore.pipeline_states import PIPELINE_STATUS
 from backend.app.infra import jobqueue
 from backend.app.infra.logging import get_logger
 
@@ -139,14 +140,21 @@ def handle(
             "source_channel": source_channel,
             "correlation_id": correlation_id,
             "source_path": source_path,
+            "fingerprint": fingerprint,
+            "source_mime": source_mime,
+            "stage": "extraction",
+            "pipeline_status": PIPELINE_STATUS.EXTRACTION_IN_PROGRESS,
         },
     )
-    gateway.update_pipeline_status(entry_id, pipeline_status="extraction_in_progress")
+    gateway.update_pipeline_status(
+        entry_id,
+        pipeline_status=PIPELINE_STATUS.EXTRACTION_IN_PROGRESS,
+    )
     _record_capture_event(
         gateway,
         entry_id,
         event_type="extraction_started",
-        pipeline_status="extraction_in_progress",
+        pipeline_status=PIPELINE_STATUS.EXTRACTION_IN_PROGRESS,
         correlation_id=correlation_id,
         source_channel=source_channel,
         extra={
@@ -167,7 +175,7 @@ def handle(
             "fingerprint": fingerprint,
         }
     )
-    capture_patch: Dict[str, Any] = {"ingest_state": "processing_extraction"}
+    capture_patch: Dict[str, Any] = {}
     if document_patch:
         capture_patch["document"] = document_patch
     _merge_capture_metadata_patch(gateway, entry_id, capture_patch)
@@ -271,7 +279,7 @@ def handle(
             "extracted_text_file_path": metadata.get("extracted_text_file_path"),
         }
     )
-    success_patch: Dict[str, Any] = {"ingest_state": "processing_normalization"}
+    success_patch: Dict[str, Any] = {}
     if success_doc_patch:
         success_patch["document"] = success_doc_patch
     _merge_capture_metadata_patch(gateway, entry_id, success_patch)
@@ -285,12 +293,15 @@ def handle(
         verbatim_preview=verbatim_preview,
         content_lang=content_lang,
     )
-    gateway.update_pipeline_status(entry_id, pipeline_status="extraction_complete")
+    gateway.update_pipeline_status(
+        entry_id,
+        pipeline_status=PIPELINE_STATUS.EXTRACTION_COMPLETE,
+    )
     _record_capture_event(
         gateway,
         entry_id,
         event_type="extraction_completed",
-        pipeline_status="extraction_complete",
+        pipeline_status=PIPELINE_STATUS.EXTRACTION_COMPLETE,
         correlation_id=correlation_id,
         source_channel=source_channel,
         extra={
@@ -310,7 +321,7 @@ def handle(
             gateway,
             entry_id,
             event_type="extraction_file_rolled",
-            pipeline_status="extraction_complete",
+            pipeline_status=PIPELINE_STATUS.EXTRACTION_COMPLETE,
             correlation_id=correlation_id,
             source_channel=source_channel,
             extra={
@@ -340,6 +351,10 @@ def handle(
             "entry_id": entry_id,
             "source_channel": source_channel,
             "correlation_id": correlation_id,
+            "stage": "extraction",
+            "pipeline_status": PIPELINE_STATUS.EXTRACTION_COMPLETE,
+            "processing_ms": processing_ms,
+            "segment_count": segment_count,
         },
     )
 
@@ -362,12 +377,15 @@ def _handle_failure(
         message=message,
         retryable=retryable,
     )
-    gateway.update_pipeline_status(entry_id, pipeline_status="extraction_failed")
+    gateway.update_pipeline_status(
+        entry_id,
+        pipeline_status=PIPELINE_STATUS.EXTRACTION_FAILED,
+    )
     _record_capture_event(
         gateway,
         entry_id,
         event_type="extraction_failed",
-        pipeline_status="extraction_failed",
+        pipeline_status=PIPELINE_STATUS.EXTRACTION_FAILED,
         correlation_id=correlation_id,
         source_channel=source_channel,
         extra={
@@ -387,7 +405,7 @@ def _handle_failure(
             gateway,
             entry_id,
             event_type="extraction_file_rolled",
-            pipeline_status="extraction_failed",
+            pipeline_status=PIPELINE_STATUS.EXTRACTION_FAILED,
             correlation_id=correlation_id,
             source_channel=source_channel,
             extra={
@@ -396,7 +414,6 @@ def _handle_failure(
             },
         )
     failure_patch: Dict[str, Any] = {
-        "ingest_state": "failed",
         "last_error": {
             "stage": "extraction",
             "code": error_code,
@@ -413,6 +430,9 @@ def _handle_failure(
             "error_code": error_code,
             "retryable": retryable,
             "correlation_id": correlation_id,
+            "stage": "extraction",
+            "pipeline_status": PIPELINE_STATUS.EXTRACTION_FAILED,
+            "processing_ms": processing_ms,
         },
     )
 
