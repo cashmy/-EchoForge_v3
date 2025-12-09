@@ -1,0 +1,5 @@
+SCANNED_PAGE_001 OCR REQUIRED
+This second document emulates an OCR-heavy ingestion by including uppercase text and spacing artifacts.
+Paragraphs should still be segmented even if speaker labels exist.
+SPEAKER 1: THIS IS A TEST.
+SPEAKER 2: Another TEST case.

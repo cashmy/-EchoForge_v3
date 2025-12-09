@@ -305,12 +305,56 @@ Subtasks:
 - **Depends On:** EF-05 spec  
 - **ETS Profiles:** ETS-LLM  
 - **Status Block:**
-  - **Status:** pending  
-  - **Last Updated:** 2025-12-07 — GPT-5.1-Codex  
-  - **Notes:** Pending kickoff; awaiting M02 execution window.  
+  - **Status:** done  
+  - **Last Updated:** 2025-12-08 — GPT-5.1-Codex  
+  - **Notes:** Contract finalized + published (payload/response schema, EF-06 writes, failure taxonomy) in EF05 spec + status log; ETS hooks defined.
 
 **Description:**  
 Specify valid semantic operations (`summarize` v1.0), option fields, expected JSON return structure, and EF-06 update rules.
+
+**Contract Outline (Draft — 2025-12-08):**
+- **Job Type:** `echo.semantic_enrich` (INF-02) sourced exclusively from EF-04 completions; `operation` defaults to `summarize_v1` but accepts `classify_v1` when only taxonomy updates are needed.
+- **Request Payload Fields:**
+  - `entry_id` *(UUID, required)* — EF-06 record to enrich.
+  - `operation` *(enum: `summarize_v1`, `classify_v1`)* — drives prompt templates in INF-04.
+  - `mode` *(enum: `auto`, `preview`, `deep`)* — summary depth; `auto` respects `summary.max_deep_chars` + `summary.max_preview_chars` from INF-01.
+  - `source` *(enum: `normalization`)* — provenance for capture metadata; reserved for future sources.
+  - `content_lang` *(ISO 639-1, optional)* — hints LLM + EF-06 `content_lang` overrule.
+  - `user_hint` *(string, optional)* — appended to `PromptSpec.user_hint` for reruns.
+  - `classification_hint` *(string, optional)* — human-provided note when forcing `classify_v1`.
+  - `model_override` *(provider:model, optional)* — forwarded to INF-04 for explicit routing.
+  - `correlation_id`, `retry_count`, `ingest_fingerprint` — pass-through telemetry for INF-03 + ETS traceability.
+- **Response JSON (shared by all operations):**
+  ```json
+  {
+    "summary": "<2-5 sentences>",
+    "display_title": "<<=120 chars>",
+    "tags": ["alpha", "beta"],
+    "type_label": "ArchitectureNote",
+    "domain_label": "Engineering",
+    "model_used": "openai:gpt-4o-mini",
+    "confidence": {
+      "summary": 0.82,
+      "classification": 0.74
+    }
+  }
+  ```
+  `classify_v1` may omit `summary`/`display_title`; workers treat missing fields as "no-op" for that property while still persisting tags/classifications.
+- **EF-06 Persistence Rules:**
+  - `summary`, `display_title`, `summary_model`, `semantic_tags` update whenever `summary` payload present.
+  - `type_label`, `domain_label`, `classification_model`, `classification_confidence` update when labels exist; capture metadata also records `semantics.{mode,operation,model_used,attempts,tags}`.
+  - Every run appends capture events `semantic_started`/`semantic_completed` with `operation`, `mode`, `model`, `processing_ms`, and `retry_count` to keep parity with EF-02/03/04 traces.
+- **Failure Taxonomy / Retry Semantics:**
+  - INF-04 canonical error codes adopted: `llm_timeout` *(retryable)*, `llm_rate_limited` *(retryable)*, `provider_unavailable` *(retryable)*, `semantic_prompt_empty` *(non-retryable)*, `semantic_response_invalid_json` *(non-retryable)*, plus `internal_error` fallback.
+  - EF-05 workers treat retryable errors via exponential backoff (250 ms base, 2x) with max attempts from INF-01 `summary.max_retry_attempts`; non-retryable errors end the job and set EF-06 `last_error.stage = semantics`.
+- **Examples & ETS Hooks:** ETS will exercise (1) `summarize_v1` auto mode for <6k char entries, (2) forced `preview` for >6k char entries, and (3) `classify_v1` rerun to validate label-only updates without rewriting summaries.
+
+Subtasks:
+- [x] Reconcile EF05_GptEntrySemanticService_Spec_v1.0 with INF04 contract addendum to list supported operations (summarize/classify) plus required inputs.
+- [x] Define request payload schema (modes, content thresholds, optional hints) and response JSON (summary/title/tags/classification) with strict typing + examples.
+- [x] Map EF-06 persistence requirements (which fields update, capture metadata shape, audit events) for each operation mode.
+- [x] Capture failure taxonomy + retry semantics (INF-04 error classes vs EF-05 worker behavior) to unblock ETS planning.
+- [x] Publish the contract draft references (spec section, milestone notes, ETS guidance) for downstream tasks T09–T11.
 
 ---
 
@@ -320,12 +364,19 @@ Specify valid semantic operations (`summarize` v1.0), option fields, expected JS
 - **Depends On:** M02-T07, M02-T08  
 - **ETS Profiles:** ETS-LLM, ETS-Pipeline  
 - **Status Block:**
-  - **Status:** pending  
-  - **Last Updated:** 2025-12-07 — GPT-5.1-Codex  
-  - **Notes:** Pending kickoff; awaiting M02 execution window.  
+  - **Status:** done  
+  - **Last Updated:** 2025-12-08 — GPT-5.1-Codex  
+    - **Notes:** Semantic worker logging/tests + ETS README updates landed; contract-compliant payload handling and telemetry are complete (remaining ideas tracked under MI99-T11).  
 
 **Description:**  
 Implement worker that performs semantic operations from queued jobs, updates EF-06 `semantic_summary` and `semantic_tags`, and logs all decisions.
+
+Subtasks:
+- [x] Add/extend unit tests for semantic worker + LLM gateway to cover summarize_v1 auto/preview modes, classify_v1-only runs, and retry/backoff flows.
+- [x] Update `backend/app/jobs/semantic_worker.py` to consume the finalized `echo.semantic_enrich` payload (operation, mode, hints, overrides) and call INF-04 accordingly.
+- [x] Ensure EF-06 gateway writes (summary/title/tags/classification, capture metadata, capture events) match the new contract fields, including model provenance + confidence slots.
+- [x] Refresh ETS documentation (`tests/README.md`) with the three semantic scenarios defined in the contract.
+- [x] Integrate semantic job telemetry into INF-03 logging (structured events + error taxonomy) for MG06 traceability.
 
 ---
 
@@ -335,14 +386,21 @@ Implement worker that performs semantic operations from queued jobs, updates EF-
 - **Depends On:** All upstream components  
 - **ETS Profiles:** ETS-Pipeline  
 - **Status Block:**
-  - **Status:** pending  
-  - **Last Updated:** 2025-12-07 — GPT-5.1-Codex  
-  - **Notes:** Pending kickoff; awaiting M02 execution window.  
+  - **Status:** done  
+  - **Last Updated:** 2025-12-08 — GPT-5.1-Codex  
+  - **Notes:** EF-06 helper + worker refactors landed; unit/marker sweeps green and documentation updated.  
 
 **Description:**  
 Implement robust state transitions:  
 `captured → queued → processing → processed`  
 `failed` for any terminal error.
+
+Subtasks:
+- [x] Extend unit tests (gateway + each worker) to cover valid/invalid transitions, ensuring retries/terminal failures land in the correct states.
+- [x] Define the authoritative pipeline state diagram + transition rules (EF-06 spec addendum + shared helper constants) covering ingest_state and pipeline_status pairs.
+- [x] Update the EF-06 gateway/state helpers so only valid transitions persist, emitting capture events + audit metadata on every state change.
+- [x] Refactor EF-02/03/04/05 workers to use the centralized transition helpers for start/success/failure paths, replacing ad-hoc status writes.
+- [x] Refresh ETS documentation/status logs outlining the enforced transitions and how to validate them during pipeline dry runs.
 
 ---
 
@@ -352,12 +410,18 @@ Implement robust state transitions:
 - **Depends On:** M02-T02 through M02-T09  
 - **ETS Profiles:** ETS-Pipeline, ETS-Logging  
 - **Status Block:**
-  - **Status:** pending  
-  - **Last Updated:** 2025-12-07 — GPT-5.1-Codex  
-  - **Notes:** Pending kickoff; awaiting M02 execution window.  
+  - **Status:** done  
+  - **Last Updated:** 2025-12-08 — GPT-5.1-Codex  
+  - **Notes:** Structured logging helper/tests plus EF-02→EF-05 instrumentation landed; docs/status log refreshed with validation steps.  
 
 **Description:**  
 Ensure traceability across EF-02/03/04/05 by logging each transition and error code.
+
+Subtasks:
+- [x] Inventory existing logging/capture-event coverage and confirm INF-03 schema requirements for EF-02→EF-05 (analysis/research).
+- [x] Draft or enhance unit/ets tests that assert structured logging for start/success/failure paths before touching worker code.
+- [x] Implement/update worker logging to satisfy the new tests (transcription, extraction, normalization, semantic) while keeping EF-06 capture metadata aligned.
+- [x] Document logging expectations in ETS guidance/status logs, including how to validate them during pipeline dry runs.
 
 ---
 
@@ -367,9 +431,9 @@ Ensure traceability across EF-02/03/04/05 by logging each transition and error c
 - **Depends On:** All pipeline components  
 - **ETS Profiles:** ETS-Pipeline, ETS-LLM  
 - **Status Block:**
-  - **Status:** pending  
-  - **Last Updated:** 2025-12-07 — GPT-5.1-Codex  
-  - **Notes:** Pending kickoff; awaiting M02 execution window.  
+  - **Status:** done  
+  - **Last Updated:** 2025-12-09 — GPT-5.1-Codex  
+  - **Notes:** Harness, rehearsal procedure, fixtures, and governance logs are complete; ready for ETS operators.  
 
 **Description:**  
 Test the full pipeline for:  
@@ -379,6 +443,15 @@ Test the full pipeline for:
 - State transitions  
 - Idempotent re-runs  
 
+Subtasks:
+- [x] Draft an ETS pipeline test matrix that enumerates end-to-end scenarios (happy path, retryable/transient faults, terminal failures, semantic-only reruns) referencing the authoritative specs.
+- [x] Prepare deterministic ETS fixtures (audio clips, document bundles, normalized payload snapshots) and INF-02 queue seeds so each scenario can be executed repeatedly across Runtime Shapes A/B.
+- [x] Implement or extend the automated ETS harness/marker sweep (pytest + orchestration scripts) that runs EF-02→EF-05 jobs, captures telemetry, and asserts pipeline statuses/logging for success/failure paths.
+- [x] Document the rehearsal procedure in `tests/README.md` (or dedicated ETS guide) outlining command sequences, expected artifacts, and verification steps for operators before milestone sign-off.
+- [x] Add a status log entry summarizing the ETS pipeline test coverage, execution results, and any open issues or observations for future improvements.
+- [x] Promote the M02-T12 task to `done` once all tests pass consistently and documentation is finalized.
+- [x] Generate a git commit.
+
 ---
 
 ### M02-T13 — Produce Status Log for M02
@@ -386,7 +459,7 @@ Test the full pipeline for:
 - **Type:** governance  
 - **Depends On:** Initial pipeline mechanics  
 - **Status Block:**
-  - **Status:** pending  
+  - **Status:** in_progress  
   - **Last Updated:** 2025-12-07 — GPT-5.1-Codex  
   - **Notes:** Pending kickoff; awaiting M02 execution window.  
 
@@ -400,7 +473,7 @@ Create structured status logs reflecting milestone progress per MTS v1.1.
 - **Type:** governance  
 - **Depends On:** M02-T01 through M02-T12  
 - **Status Block:**  
-  - **Status:** pending  
+  - **Status:** in_progress  
   - **Last Updated:** —  
   - **Notes:** —  
 

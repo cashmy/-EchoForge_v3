@@ -1,0 +1,10 @@
+{
+  "entry_id": "00000000-0000-0000-0000-etsrefnorm",
+  "source": "transcription",
+  "normalized_text": "Hello world! This is a test entry for ETS dry runs.",
+  "segment_count": 1,
+  "chunk_count": 1,
+  "profile": "standard",
+  "pipeline_status": "normalization_complete",
+  "correlation_id": "ets-norm-ref-001"
+}

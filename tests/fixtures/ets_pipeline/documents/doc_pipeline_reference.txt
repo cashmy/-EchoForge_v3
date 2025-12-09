@@ -1,0 +1,10 @@
+# EchoForge Audio Transcript (Reference)
+
+This file validates the EF-03 extraction worker when text-based documents are queued.
+It contains multiple paragraphs, markdown headers, and list items so normalization can collapse
+whitespace properly.
+
+- Bullet one with   extra   spaces
+- Bullet two referencing INF-03 logging
+
+Timestamp 00:01 Hello world!
