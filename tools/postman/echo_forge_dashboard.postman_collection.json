@@ -1,0 +1,112 @@
+{
+  "info": {
+    "name": "EchoForge Dashboard + Diagnostics",
+    "version": "2025.12.10",
+    "description": "Postman collection to exercise EchoForge EF-07 dashboard endpoints while the UI is in development.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Diagnostics",
+      "description": "Simple probes to confirm the FastAPI backend is reachable before running dashboard queries.",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "health"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Dashboard",
+      "description": "Endpoints defined in M04 to power the dashboard widgets.",
+      "item": [
+        {
+          "name": "Dashboard Summary (default window)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "Returns counts for pipeline, cognitive workload, taxonomy leaderboards, and recency widgets using the default time window configured on the server.",
+            "url": {
+              "raw": "{{baseUrl}}/api/dashboard/summary",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "dashboard",
+                "summary"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Dashboard Summary (custom window)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "Override the aggregation range and include archived entries when validating ETS scenarios.",
+            "url": {
+              "raw": "{{baseUrl}}/api/dashboard/summary?time_window_days={{timeWindowDays}}&include_archived={{includeArchived}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "dashboard",
+                "summary"
+              ],
+              "query": [
+                {
+                  "key": "time_window_days",
+                  "value": "{{timeWindowDays}}",
+                  "description": "Clamp is 1-30 days. Defaults to the server configuration (currently 7)."
+                },
+                {
+                  "key": "include_archived",
+                  "value": "{{includeArchived}}",
+                  "description": "Set true to include archived EF-06 entries in counts; defaults to false."
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8000",
+      "type": "string",
+      "description": "FastAPI server base URL. Override when testing different runtime shapes."
+    },
+    {
+      "key": "timeWindowDays",
+      "value": "7",
+      "type": "string",
+      "description": "Window size for the momentum widgets."
+    },
+    {
+      "key": "includeArchived",
+      "value": "false",
+      "type": "string",
+      "description": "Flag to include archived entries."
+    }
+  ]
+}

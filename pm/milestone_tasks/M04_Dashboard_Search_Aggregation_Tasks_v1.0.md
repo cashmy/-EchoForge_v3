@@ -76,9 +76,9 @@ For deeper planning, add an optional **Subtasks** section directly beneath the D
 - **Depends On:** M01–M03  
 - **ETS Profiles:** ETS-UX, ETS-Arch  
 - **Status Block:**  
-  - **Status:** pending  
-  - **Last Updated:** —  
-  - **Notes:** —  
+  - **Status:** done  
+  - **Last Updated:** 2025-12-10  
+  - **Notes:** Dashboard KPI design finalized in `pm/milestone_tasks/M04_T01_Subtask_Plan.md`.  
 
 **Description:**  
 Enumerate the primary dashboard questions EchoForge v3 must answer, e.g.:
@@ -95,6 +95,9 @@ Define v1.0 KPIs and visualizations, such as:
 - Top Types / Top Domains (by count)  
 - “Needs Review” slice (by `cognitive_status`)
 
+#### Subtasks
+- [x] ST01 — Draft dashboard KPI plan (`pm/milestone_tasks/M04_T01_Subtask_Plan.md`)
+
 Outputs:
 
 - A short design note summarizing dashboard sections and metrics.  
@@ -107,9 +110,9 @@ Outputs:
 - **Depends On:** M04-T01, EF07 v1.2  
 - **ETS Profiles:** ETS-UX, ETS-API  
 - **Status Block:**  
-  - **Status:** pending  
-  - **Last Updated:** —  
-  - **Notes:** —  
+  - **Status:** done  
+  - **Last Updated:** 2025-12-10  
+  - **Notes:** Search/filter spec delivered in `pm/milestone_tasks/M04_T02_Subtask_Plan.md`.  
 
 **Description:**  
 Define how `/api/entries` should behave for:
@@ -131,6 +134,9 @@ Outputs:
 
 - A concise “Search & Filter Behavior” note referencing EF07 `/api/entries`.
 
+#### Subtasks
+- [x] ST01 — Document search/filter spec (`pm/milestone_tasks/M04_T02_Subtask_Plan.md`)
+
 ---
 
 ### M04-T03 — Tune EF-06 Indexing for Dashboards & Search
@@ -139,9 +145,9 @@ Outputs:
 - **Depends On:** M04-T02, EF06 v1.2  
 - **ETS Profiles:** ETS-DB, ETS-Perf  
 - **Status Block:**  
-  - **Status:** pending  
-  - **Last Updated:** —  
-  - **Notes:** —  
+  - **Status:** done  
+  - **Last Updated:** 2025-12-10  
+  - **Notes:** EF-06 + taxonomy index migrations applied via `alembic upgrade head` (Postgres trace confirms execution).  
 
 **Description:**  
 Define and implement required indexes in EF-06 and taxonomy tables for:
@@ -156,6 +162,10 @@ Document:
 - Any tradeoffs made for local vs SaaS deployments.  
 - Expected query shapes from EF-07.
 
+#### Subtasks
+- [x] ST01 — Document EF-06 index plan (`pm/milestone_tasks/M04_T03_Subtask_Plan.md`)
+- [x] ST02 — Apply EF-06 + taxonomy index migrations (`backend/migrations/*_add_*index*.py`)
+
 ---
 
 ### M04-T04 — Implement `/api/dashboard/summary` Aggregation Logic
@@ -164,9 +174,9 @@ Document:
 - **Depends On:** M04-T01, M04-T03, EF07 v1.2  
 - **ETS Profiles:** ETS-API, ETS-Perf  
 - **Status Block:**  
-  - **Status:** pending  
-  - **Last Updated:** —  
-  - **Notes:** —  
+  - **Status:** done  
+  - **Last Updated:** 2025-12-10  
+  - **Notes:** `/api/dashboard/summary` service + tests landed per `backend/app/domain/dashboard/summary_service.py`.  
 
 **Description:**  
 Implement the backing logic for:
@@ -184,6 +194,11 @@ Ensure:
 - Queries are efficient on expected dataset sizes.  
 - Results format matches EF07 v1.2 examples.
 
+#### Subtasks
+- [x] ST01 — Draft `/api/dashboard/summary` plan (`pm/milestone_tasks/M04_T04_Subtask_Plan.md`)
+- [x] ST02 — Implement summary service/router (`backend/app/domain/dashboard/summary_service.py`, `backend/app/api/routers/dashboard.py`)
+- [x] ST03 — Add regression coverage & Postman validation (`tests/unit/test_dashboard_summary_service.py`, `tools/postman/echo_forge_dashboard.postman_collection.json`)
+
 ---
 
 ### M04-T05 — Implement Search & Filtering for `/api/entries`
@@ -195,6 +210,9 @@ Ensure:
   - **Status:** pending  
   - **Last Updated:** —  
   - **Notes:** —  
+#### Subtasks
+- [ ] ST01 — Implement `/api/entries` query/filter builder + gateway wiring
+- [ ] ST02 — Add ETS/API tests for filters, pagination, and archived behavior
 
 **Description:**  
 Implement `/api/entries` semantics as defined in M04-T02:
@@ -218,6 +236,9 @@ Implement `/api/entries` semantics as defined in M04-T02:
   - **Status:** pending  
   - **Last Updated:** —  
   - **Notes:** —  
+#### Subtasks
+- [ ] ST01 — Wire dashboard widgets to `/api/dashboard/summary`
+- [ ] ST02 — Wire entry list + filters to `/api/entries`
 
 **Description:**  
 Implement the frontend wiring to:
@@ -260,9 +281,9 @@ Mark as *optional* and explicitly note whether implementation is deferred to a l
 - **Depends On:** M04-T03, M04-T04, M04-T05  
 - **ETS Profiles:** ETS-API, ETS-DB, ETS-Perf  
 - **Status Block:**  
-  - **Status:** pending  
-  - **Last Updated:** —  
-  - **Notes:** —  
+  - **Status:** blocked  
+  - **Last Updated:** 2025-12-10  
+  - **Notes:** Waiting on `/api/entries` implementation (T05) + frontend wiring (T06) before ETS scenarios can execute.  
 
 **Description:**  
 Define and/or implement ETS test cases, including:

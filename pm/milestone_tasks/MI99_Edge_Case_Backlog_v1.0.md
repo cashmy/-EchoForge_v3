@@ -218,9 +218,9 @@ These refinements improve long-term usability but are explicitly marked **Nice-t
 - **Type:** testing / governance  
 - **Depends On:** Completion of M03 milestone deliverables  
 - **Status Block:**
-  - **Status:** pending  
+  - **Status:** done  
   - **Last Updated:** 2025-12-10 — GPT-5.1-Codex  
-  - **Notes:** Add a reminder to run the full pytest + ETS suite once M03 wraps to capture a dated verification record.  
+  - **Notes:** Full test sweep recorded in `pm/status_logs/Status_Log_M03_2025-12-10.md` (unit suite + `scripts/ets_runner.py --profile taxonomy`; index test skipped w/out DB DSN).  
 
 **Description:**  
 When M03 taxonomy work is declared done, execute a comprehensive automated test sweep (`pytest` unit/service suites plus ETS taxonomy profiles) and capture the results in the status log/CI evidence. This ensures feature-flag combinations and schema changes introduced across T01–T06 are validated together before moving into downstream milestones.
@@ -261,6 +261,61 @@ Track the future action of wiring taxonomy-index verification into MG06 ETS suit
 1. Use `scripts/collect_taxonomy_explain.py` + `scripts/show_index_scans.py` (or the shared helpers exposed via `scripts/taxonomy_harness.py`) inside ETS workloads to capture plan/idx_scan evidence.  
 2. Attach outputs to the MG06 audit bundle (planned case `ETS-DB-TAX-IDX-01`) and note the corresponding automated signal from `tests/ets/test_taxonomy_db_indexes.py`.  
 3. Confirm documentation paths (`M03_T09_Subtask_Plan.md#10`, MG06 milestone file, and the README section above) stay aligned before MG06 kickoff.  
+
+---
+
+### MI99-T15 — `/api/entries` Backend Completion (post-frontend readiness)
+
+- **Type:** implementation backlog  
+- **Depends On:** M04-T05 plan, frontend readiness for search UI  
+- **Status Block:**
+  - **Status:** pending  
+  - **Last Updated:** 2025-12-10 — GPT-5.1-Codex  
+  - **Notes:** Deferred until frontend implementation resumes; see `pm/milestone_tasks/M04_T05_Subtask_Plan.md` for latest context.  
+
+**Description:**  
+Finalize `/api/entries` search/filter endpoint once frontend work resumes, ensuring API semantics align with the documented plan (query builder, validation, pagination, ETS hooks). This includes wiring FastAPI responses, EF-06 query helpers, and initial regression tests before UI consumption.
+
+#### Subtasks
+- [ ] ST01 — Implement query builder + FastAPI handler (`backend/app/api/routers/entries.py`)  
+- [ ] ST02 — Add regression + ETS coverage per `M04_T05_Subtask_Plan.md`  
+
+---
+
+### MI99-T16 — Dashboard & Entry List UI Wiring
+
+- **Type:** UI backlog  
+- **Depends On:** M04-T06 plan, frontend shell availability  
+- **Status Block:**
+  - **Status:** pending  
+  - **Last Updated:** 2025-12-10 — GPT-5.1-Codex  
+  - **Notes:** Waiting for Electron/SPA scaffolding; refer to `pm/milestone_tasks/M04_T06_Subtask_Plan.md`.  
+
+**Description:**  
+Implement dashboard widgets and entry list filters in the EF-07 desktop UI once the frontend is operational. Work covers API integration, state management, zero-states, and pagination ergonomics matching the backend contracts.
+
+#### Subtasks
+- [ ] ST01 — Wire dashboard components to `/api/dashboard/summary`  
+- [ ] ST02 — Wire entry list + filters to `/api/entries`  
+- [ ] ST03 — Add UI smoke tests / ETS hooks per plan  
+
+---
+
+### MI99-T17 — Saved Views Design & Implementation Decision
+
+- **Type:** design backlog  
+- **Depends On:** M04-T07 plan, stable UI filter model  
+- **Status Block:**
+  - **Status:** pending  
+  - **Last Updated:** 2025-12-10 — GPT-5.1-Codex  
+  - **Notes:** Optional feature; backlog entry ensures decision is revisited post-frontend bring-up. See `pm/milestone_tasks/M04_T07_Subtask_Plan.md`.  
+
+**Description:**  
+Determine scope and delivery plan for saved filters/views once the UI supports core search features. Decisions include persistence layer, UX flows, and ETS implications. Output should funnel into MG governance docs and future milestones when approved.
+
+#### Subtasks
+- [ ] ST01 — Finalize use cases + storage strategy  
+- [ ] ST02 — Define API/UI implications and ETS coverage  
 
 ---
 

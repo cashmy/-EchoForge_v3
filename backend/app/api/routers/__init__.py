@@ -1,5 +1,5 @@
 """Router exports for FastAPI composition."""
 
-from . import capture, entries, taxonomy, health
+from . import capture, dashboard, entries, taxonomy, health
 
-__all__ = ["capture", "entries", "taxonomy", "health"]
+__all__ = ["capture", "dashboard", "entries", "taxonomy", "health"]
