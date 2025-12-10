@@ -152,7 +152,9 @@ def postgres_gateway() -> PostgresEntryStoreGateway:
         sa.Column("display_title", sa.Text(), nullable=True),
         sa.Column("summary_model", sa.String(length=128), nullable=True),
         sa.Column("semantic_tags", sa.JSON(), nullable=True),
+        sa.Column("type_id", sa.String(length=128), nullable=True),
         sa.Column("type_label", sa.String(length=128), nullable=True),
+        sa.Column("domain_id", sa.String(length=128), nullable=True),
         sa.Column("domain_label", sa.String(length=128), nullable=True),
         sa.Column("classification_model", sa.String(length=128), nullable=True),
         sa.Column("is_classified", sa.Boolean(), nullable=False, default=False),
@@ -350,3 +352,65 @@ def test_postgres_merge_capture_metadata_persists_changes(
     capture_meta = snapshot.metadata.get("capture_metadata") or {}
     assert capture_meta.get("ingest_state") == "processing_extraction"
     assert (capture_meta.get("document") or {}).get("source_mime") == "application/pdf"
+
+
+def test_update_entry_taxonomy_inmemory_handles_partial_dimensions():
+    gateway = InMemoryEntryStoreGateway()
+    entry = gateway.create_entry(
+        source_type="document",
+        source_channel="manual_text",
+        source_path="/tmp/doc.txt",
+        metadata={"capture_fingerprint": "tax-fp", "fingerprint_algo": "sha256"},
+    )
+
+    first = gateway.update_entry_taxonomy(
+        entry.entry_id,
+        type_id="project_note",
+        type_label="Project Note",
+        domain_id=None,
+        domain_label=None,
+    )
+
+    assert first.type_id == "project_note"
+    assert first.type_label == "Project Note"
+    assert first.domain_label is None
+    assert first.is_classified is False
+
+    second = gateway.update_entry_taxonomy(
+        entry.entry_id,
+        type_id="project_note",
+        type_label="Project Note",
+        domain_id="product_ops",
+        domain_label="Product Ops",
+    )
+
+    assert second.domain_id == "product_ops"
+    assert second.domain_label == "Product Ops"
+    assert second.is_classified is True
+
+
+def test_update_entry_taxonomy_postgres_updates_columns(
+    postgres_gateway: PostgresEntryStoreGateway,
+):
+    entry = postgres_gateway.create_entry(
+        source_type="audio",
+        source_channel="watch_audio",
+        source_path="/tmp/audio.wav",
+        metadata={"capture_fingerprint": "pg-tax", "fingerprint_algo": "sha256"},
+    )
+
+    updated = postgres_gateway.update_entry_taxonomy(
+        entry.entry_id,
+        type_id="incident",
+        type_label="Incident",
+        domain_id="sre",
+        domain_label="SRE",
+    )
+
+    assert updated.type_id == "incident"
+    assert updated.type_label == "Incident"
+    assert updated.domain_id == "sre"
+    assert updated.is_classified is True
+
+    snapshot = postgres_gateway.get_entry(entry.entry_id)
+    assert snapshot.domain_label == "SRE"

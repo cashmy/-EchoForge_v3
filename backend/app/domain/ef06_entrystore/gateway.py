@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any, Dict, List, Mapping, Optional, Protocol, Tuple
 
 from sqlalchemy import MetaData, Table, insert, select, update
@@ -74,15 +75,6 @@ class EntryStoreGateway(Protocol):  # pragma: no cover
         retryable: bool,
     ) -> Entry: ...
 
-    def record_extraction_failure(
-        self,
-        entry_id: str,
-        *,
-        error_code: str,
-        message: str,
-        retryable: bool,
-    ) -> Entry: ...
-
     def record_normalization_result(
         self,
         entry_id: str,
@@ -118,6 +110,17 @@ class EntryStoreGateway(Protocol):  # pragma: no cover
         type_label: str,
         domain_label: str,
         model_used: Optional[str] = None,
+    ) -> Entry: ...
+
+    def update_entry_taxonomy(
+        self,
+        entry_id: str,
+        *,
+        type_id: Optional[str],
+        type_label: Optional[str],
+        domain_id: Optional[str],
+        domain_label: Optional[str],
+        classification_model: Optional[str] = None,
     ) -> Entry: ...
 
     def record_capture_event(
@@ -363,12 +366,62 @@ class InMemoryEntryStoreGateway(EntryStoreGateway, FingerprintReadableGateway):
         record = self._entries.get(entry_id)
         if record is None:
             raise KeyError(f"Entry {entry_id} not found")
-        updated = record.with_classification_result(
+        return self._apply_taxonomy_update(
+            record,
+            type_id=record.type_id,
             type_label=type_label,
+            domain_id=record.domain_id,
             domain_label=domain_label,
-            model_used=model_used,
+            classification_model=model_used,
         )
-        self._entries[entry_id] = updated
+
+    def update_entry_taxonomy(
+        self,
+        entry_id: str,
+        *,
+        type_id: Optional[str],
+        type_label: Optional[str],
+        domain_id: Optional[str],
+        domain_label: Optional[str],
+        classification_model: Optional[str] = None,
+    ) -> Entry:
+        record = self._entries.get(entry_id)
+        if record is None:
+            raise KeyError(f"Entry {entry_id} not found")
+        return self._apply_taxonomy_update(
+            record,
+            type_id=type_id,
+            type_label=type_label,
+            domain_id=domain_id,
+            domain_label=domain_label,
+            classification_model=classification_model,
+        )
+
+    def _apply_taxonomy_update(
+        self,
+        record: Entry,
+        *,
+        type_id: Optional[str],
+        type_label: Optional[str],
+        domain_id: Optional[str],
+        domain_label: Optional[str],
+        classification_model: Optional[str],
+    ) -> Entry:
+        updated = replace(
+            record,
+            type_id=type_id,
+            type_label=type_label,
+            domain_id=domain_id,
+            domain_label=domain_label,
+            classification_model=(
+                classification_model
+                if classification_model is not None
+                else record.classification_model
+            ),
+            is_classified=bool(type_label and domain_label),
+            updated_at=utcnow(),
+        )
+        self._entries[record.entry_id] = updated
         return updated
 
     def record_capture_event(
@@ -487,7 +540,9 @@ class PostgresEntryStoreGateway(EntryStoreGateway, FingerprintReadableGateway):
                 summary=entry.summary,
                 display_title=entry.display_title,
                 summary_model=entry.summary_model,
+                type_id=entry.type_id,
                 type_label=entry.type_label,
+                domain_id=entry.domain_id,
                 domain_label=entry.domain_label,
                 classification_model=entry.classification_model,
                 is_classified=entry.is_classified,
@@ -650,24 +705,80 @@ class PostgresEntryStoreGateway(EntryStoreGateway, FingerprintReadableGateway):
     ) -> Entry:
         with self._engine.begin() as conn:
             current = self._fetch_entry(conn, entry_id)
-            stmt = (
-                update(self._entries)
-                .where(self._entries.c.entry_id == entry_id)
-                .values(
-                    type_label=type_label,
-                    domain_label=domain_label,
-                    classification_model=model_used
-                    if model_used is not None
-                    else current.get("classification_model"),
-                    is_classified=True,
-                    updated_at=utcnow(),
-                )
-                .returning(self._entries)
+            classification_model = (
+                model_used
+                if model_used is not None
+                else current.get("classification_model")
             )
-            row = conn.execute(stmt).mappings().first()
+            row = self._execute_taxonomy_update(
+                conn,
+                entry_id,
+                type_id=current.get("type_id"),
+                type_label=type_label,
+                domain_id=current.get("domain_id"),
+                domain_label=domain_label,
+                classification_model=classification_model,
+            )
         if row is None:
             raise KeyError(f"Entry {entry_id} not found")
         return _row_to_entry(row)
+
+    def update_entry_taxonomy(
+        self,
+        entry_id: str,
+        *,
+        type_id: Optional[str],
+        type_label: Optional[str],
+        domain_id: Optional[str],
+        domain_label: Optional[str],
+        classification_model: Optional[str] = None,
+    ) -> Entry:
+        with self._engine.begin() as conn:
+            current = self._fetch_entry(conn, entry_id)
+            classification_value = (
+                classification_model
+                if classification_model is not None
+                else current.get("classification_model")
+            )
+            row = self._execute_taxonomy_update(
+                conn,
+                entry_id,
+                type_id=type_id,
+                type_label=type_label,
+                domain_id=domain_id,
+                domain_label=domain_label,
+                classification_model=classification_value,
+            )
+        if row is None:
+            raise KeyError(f"Entry {entry_id} not found")
+        return _row_to_entry(row)
+
+    def _execute_taxonomy_update(
+        self,
+        conn,
+        entry_id: str,
+        *,
+        type_id: Optional[str],
+        type_label: Optional[str],
+        domain_id: Optional[str],
+        domain_label: Optional[str],
+        classification_model: Optional[str],
+    ):
+        stmt = (
+            update(self._entries)
+            .where(self._entries.c.entry_id == entry_id)
+            .values(
+                type_id=type_id,
+                type_label=type_label,
+                domain_id=domain_id,
+                domain_label=domain_label,
+                classification_model=classification_model,
+                is_classified=bool(type_label and domain_label),
+                updated_at=utcnow(),
+            )
+            .returning(self._entries)
+        )
+        return conn.execute(stmt).mappings().first()
 
     def record_transcription_result(
         self,
@@ -964,7 +1075,9 @@ def _row_to_entry(row: Mapping[str, Any]) -> Entry:
         display_title=row.get("display_title"),
         summary_model=row.get("summary_model"),
         semantic_tags=row.get("semantic_tags"),
+        type_id=row.get("type_id"),
         type_label=row.get("type_label"),
+        domain_id=row.get("domain_id"),
         domain_label=row.get("domain_label"),
         classification_model=row.get("classification_model"),
         is_classified=bool(row.get("is_classified")),

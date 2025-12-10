@@ -36,6 +36,25 @@ Template:
 - **Notes:** —
 ```
 
+Every task MUST contain a **Status Block**:
+
+```markdown
+- **Status:** pending  <!-- pending | in_progress | blocked | deferred | done -->
+- **Last Updated:** —
+- **Notes:** —
+``` 
+For deeper planning, add an optional **Subtasks** section directly beneath the Description:
+
+```markdown
+#### Subtasks
+- [ ] ST01 — Short label (link to detailed plan doc)
+- [ ] ST02 — …
+```
+
+- Use the checklist for governance-visible tracking.  
+- Keep the milestone file concise; put expanded rationale, research, and test plans in the linked document.
+
+
 ---
 
 ## 2. Tasks

@@ -30,7 +30,7 @@ M04 focuses on *reading and aggregating* from EF-06 and taxonomy tables; it does
 
 ## 1. Status Tracking Model
 
-Each task contains a Status Block:
+Every task MUST contain a **Status Block**:
 
 ```markdown
 - **Status:** pending  <!-- pending | in_progress | blocked | deferred | done -->
@@ -38,7 +38,18 @@ Each task contains a Status Block:
 - **Notes:** —
 ```
 
-Codex-LLM MUST only mutate these three fields.
+Codex-LLM MUST only edit these three fields when updating status.  
+For deeper planning, add an optional **Subtasks** section directly beneath the Description:
+
+```markdown
+#### Subtasks
+- [ ] ST01 — Short label (link to detailed plan doc)
+- [ ] ST02 — …
+```
+
+- Use the checklist for governance-visible tracking.  
+- Link each line to a supporting plan/ETS document (`pm/milestone_tasks/M04_Tnn_Subtask_Plan.md`, etc.) where detailed research, test matrices, and notes live.  
+- Keep the milestone file concise; put expanded rationale, research, and test plans in the linked document.
 
 ---
 

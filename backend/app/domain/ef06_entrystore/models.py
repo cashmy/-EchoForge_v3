@@ -51,7 +51,9 @@ class Entry:
     display_title: Optional[str] = None
     summary_model: Optional[str] = None
     semantic_tags: Optional[List[str]] = None
+    type_id: Optional[str] = None
     type_label: Optional[str] = None
+    domain_id: Optional[str] = None
     domain_label: Optional[str] = None
     classification_model: Optional[str] = None
     is_classified: bool = False
@@ -84,7 +86,9 @@ class Entry:
         display_title: Optional[str] = None,
         summary_model: Optional[str] = None,
         semantic_tags: Optional[List[str]] = None,
+        type_id: Optional[str] = None,
         type_label: Optional[str] = None,
+        domain_id: Optional[str] = None,
         domain_label: Optional[str] = None,
         classification_model: Optional[str] = None,
         is_classified: bool = False,
@@ -122,7 +126,9 @@ class Entry:
             display_title=display_title,
             summary_model=summary_model,
             semantic_tags=list(semantic_tags) if semantic_tags else None,
+            type_id=type_id,
             type_label=type_label,
+            domain_id=domain_id,
             domain_label=domain_label,
             classification_model=classification_model,
             is_classified=is_classified,

@@ -28,6 +28,10 @@
 - `test_normalization_worker.py` (EF-04/INF-02) — Text cleanup profiles, segment thresholds, override handling, and semantic job enqueueing.
 - `test_semantic_worker.py` (EF-05/INF-04) — Prompt construction, structured tag/classification persistence, capture metadata, and retry/backoff handling for semantic enrichment.
 
+### Taxonomy Governance & API
+- `test_taxonomy_service.py` (M03/EF-07) — Ensures slug validation, uniqueness enforcement, delete gating, capture-event emission, and metrics counters remain aligned with `EF06_EntryStore_Addendum_v1.2 §7.6`.
+- `test_taxonomy_api.py` (M03/EF-07) — FastAPI-level coverage verifying `/api/types` + `/api/domains` respect `X-Actor-*` headers, return deletion warnings when references exist, and uphold `ALLOW_TAXONOMY_DELETE` guardrails.
+
 ## Spec Markers & Targeted Runs
 
 Markers (from `pytest.ini`): `ef01`, `ef02`, `ef03`, `ef04`, `ef05`, `ef06`, `ef07`, `inf01`, `inf02`, `inf04`.
@@ -38,6 +42,7 @@ Examples:
 - EF-02 through EF-05 pipeline sweep: `pytest -m "ef02 or ef03 or ef04 or ef05" tests/unit`
 - LLM/Whisper integration only: `pytest -m inf04 tests/unit/test_llm_gateway.py tests/unit/test_whisper_client.py`
 - ETS pipeline harness (EF-02 → EF-05): `pytest -m ets_pipeline tests/ets`
+- Taxonomy CRUD surfaces: `pytest tests/unit/test_taxonomy_api.py tests/unit/test_taxonomy_service.py`
 
 Use markers during milestone sign-off or while iterating on a specific subsystem to avoid running the entire suite.
 
@@ -280,50 +285,8 @@ Real-media validation for M02-T02a uses the two bundled WAV clips located in `wa
 
 Document ETS outcomes (success timestamps, resulting transcript snippets, any deviations) inside `pm/status_logs/` when closing out M02-T02a.
 
----
+### M03 (Taxonomy CRUD & Governance)
+- **Service validation + observability** — `tests/unit/test_taxonomy_service.py` asserts `taxonomy.*` events include before/after snapshots, delete-block counters increment, and `taxonomy_{kind}_active_total` gauges refresh when `active` changes.
+- **HTTP contract + actor metadata** — `tests/unit/test_taxonomy_api.py` verifies FastAPI endpoints honor `X-Actor-*` headers, return deletion warnings with `referenced_entries`, and respect the `ALLOW_TAXONOMY_DELETE` flag.
+- **Recommended command** — `pytest tests/unit/test_taxonomy_api.py tests/unit/test_taxonomy_service.py`
 
-# EchoForge Tests
-
-- `e2e/`: cross-package runtime tests for Shapes A/B.
-- `smoke_desktop/`: Electron smoke scenarios verifying EF-07.1 host adapter.
-
-## Unit Suite Overview
-
-Each `tests/unit/test_*.py` file focuses on a distinct piece of the EF-01/EF-06 ingestion path:
-
-- `test_entrystore_gateway.py` — Verifies the in-memory EF-06 gateway enforces fingerprints, sets defaults, supports lookups by fingerprint, and updates pipeline statuses atomically.
-- `test_fingerprint.py` — Ensures file fingerprinting produces deterministic hashes/algorithms across binary and text fixtures, catching regressions in idempotency inputs.
-- `test_idempotency.py` — Exercises the decision matrix for EF-01 duplicates, confirming that queued/processing entries are skipped while failed ones trigger retries.
-- `test_manual_capture.py` — Checks the manual text capture helper for fingerprint generation, metadata persistence, and validation of empty payloads.
-- `test_capture_api.py` — Validates the `/api/capture` endpoint for both text and file-ref submissions, including INF-02 job enqueueing and duplicate detection.
-- `test_config_loader.py` — Verifies INF-01 config profiles load correctly, honoring `ECHOFORGE_CONFIG_PROFILE`, capture watch roots, manual hashing recipes, and job-queue settings.
-- `test_watch_folders.py` — Validates that watch roots are scaffolded with `incoming/processing/processed/failed` directories and that helper utilities guard against misconfiguration.
-- `test_watcher_orchestrator.py` — Covers the orchestration loop: fingerprint lookup, file moves, entry creation defaults, job enqueue payloads, and duplicate short-circuiting.
-- `test_watcher_runtime.py` — Runs the runtime adapter end-to-end for a temporary watch root, asserting that jobs are enqueued via the INF-02 shim and entries transition to queued statuses after processing.
-- `test_transcription_worker.py` — Validates the EF-02 worker’s success/failure paths, ensuring transcripts persist to EF-06, downstream jobs are queued, and INF-04 retryable faults update pipeline status appropriately.
-
-## Spec Markers & Targeted Runs
-
-Each unit module declares a `# Coverage: ...` comment alongside `pytestmark` entries so that suites can be filtered by spec identifiers. The available markers are defined in `pytest.ini` (`ef01`, `ef02`, `ef06`, `ef07`, `inf01`, `inf02`, `inf04`). Examples:
-
-- Run all EF-01 capture + watcher tests: `pytest -m ef01 tests/unit`
-- Focus on EF-06 datastore behaviors: `pytest -m ef06 tests/unit`
-- Combine predicates (EntryStore touching the job queue): `pytest -m "ef06 and inf02" tests/unit`
-
-Use these filters during milestone sign-off or while iterating on a specific subsystem to avoid running the entire unit suite.
-
-## ETS Coverage (M01)
-
-The following unit suites double as executable ETS-EF01 cases for Milestone 1:
-
-- **Folder lifecycle (`incoming` → `processing`)** — `test_watch_folders.py`, `test_watcher_runtime.py`
-- **Idempotency enforcement** — `test_idempotency.py`, duplicate scenario in `test_watcher_orchestrator.py`, `/api/capture` conflict test
-- **Entry creation metadata** — `test_entrystore_gateway.py`, `test_manual_capture.py`, watcher orchestrator assertions
-- **INF-02 job handoff** — `test_watcher_runtime.py` (watch roots) and `test_capture_api.py::test_capture_file_ref_enqueues_job`
-- **/api/capture behavior (text + file_ref)** — `test_capture_api.py`
-
-Run all ETS-aligned tests via:
-
-```bash
-$env:PYTHONPATH='d:\@EchoForge_v3'; pytest tests/unit
-```

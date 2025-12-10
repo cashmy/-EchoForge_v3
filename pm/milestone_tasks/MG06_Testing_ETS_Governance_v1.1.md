@@ -49,15 +49,27 @@ If any drift is detected, Codex‑LLM MUST halt and escalate to the human operat
 
 ## 1. Status Tracking Model
 
-Codex‑LLM may ONLY modify:
+Every task MUST contain a **Status Block**:
 
-```
-- Status
-- Last Updated
-- Notes
+```markdown
+- **Status:** pending  <!-- pending | in_progress | blocked | deferred | done -->
+- **Last Updated:** —
+- **Notes:** —
 ```
 
-(As defined by Milestone Task Subsystem v1.1)
+Codex-LLM MUST only edit these three fields when updating status.  
+For deeper planning, add an optional **Subtasks** section directly beneath the Description:
+
+```markdown
+#### Subtasks
+- [ ] ST01 — Short label (link to detailed plan doc)
+- [ ] ST02 — …
+```
+
+- Use the checklist for governance-visible tracking.  
+- Link each line to a supporting plan/ETS document (`pm/milestone_tasks/MG06_Tnn_Subtask_Plan.md`, etc.) where detailed research, test matrices, and notes live.  
+- Keep the milestone file concise; put expanded rationale, research, and test plans in the linked document.
+
 
 ---
 

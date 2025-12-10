@@ -191,6 +191,28 @@ Implementation notes:
 - Free-form fields (`type_label`, `semantic_tags`) remain so Entries stay understandable even if the taxonomy row is deleted or not yet created.  
 - Deleting (or deactivating) an `entry_types` row MUST NOT cascade into Entries; downstream clients fall back to the stored label if the ID no longer resolves.
 
+#### Entry Domains Table (Canonical Domains)
+
+M03-T02 introduces `entry_domains` (legacy: `domain_labels`) to provide the same canonical guarantees for domain classifications. Schema mirrors `entry_types` so workers/UI can treat both tables uniformly:
+
+| Column | Type | Constraints / Notes |
+| --- | --- | --- |
+| `id` | `VARCHAR(64)` | Primary key slug (e.g., `architecture`). Lowercase kebab/pascal casing per taxonomy conventions; immutable once issued. |
+| `name` | `VARCHAR(64)` | Short operator-facing code, unique (case-insensitive). Used in CLI/admin tooling. |
+| `label` | `VARCHAR(128)` | Human-readable title displayed to end users (e.g., `Architecture`). |
+| `description` | `TEXT` | Optional guidance describing when to use the domain. |
+| `active` | `BOOLEAN NOT NULL DEFAULT TRUE` | Governs dropdown visibility; `FALSE` hides during creation but preserves historical assignments. |
+| `sort_order` | `INTEGER NOT NULL DEFAULT 500` | Determines ordering within UI selectors; same semantics as `entry_types.sort_order`. |
+| `metadata` | `JSONB NULL` | Optional blob for UI cues (icons, color tags) or semantic hints for EF-05 reconciliation. |
+| `created_at` / `updated_at` | `TIMESTAMPTZ NOT NULL` | Managed by EntryStore triggers/defaults. |
+
+Implementation notes:
+
+- Column defaults, indexes, and auditing MUST match `entry_types` conventions so migrations/tests can share helpers.
+- IDs are canonical references that EF-05/EF-07 treat as the source of truth when present; labels remain for readability and in case an ID is missing.
+- Governance MAY pre-seed the table, but schema must allow runtime insertion via EF-07 `/api/domains` endpoints once SD04 lands.
+- No hierarchy/parental linkage exists in v1.2; future revisions would add nullable pointers once specs define them.
+
 ### 7.2 `entries` Table Extensions
 
 Two nullable columns are added to `entries` to hold loose references to taxonomy IDs:
@@ -202,16 +224,76 @@ domain_id VARCHAR(64) NULL  -- references entry_domains.id (M03-T02)
 
 - These columns are **not** enforced with hard foreign keys in v1.2; they act as advisory pointers.  
 - When both ID and label exist, clients prefer the ID for filtering/sorting and surface the label for display.  
-- When EF-05 cannot map a label to a canonical ID, it writes only the label (no `type_id`). Operators can later reconcile by assigning the appropriate ID.
+- EF-05 (and any UI client) MUST write the matching label fields even when an ID is known so the entry remains legible if taxonomy rows disappear later.  
+- When EF-05 cannot map a type/domain label to a canonical ID, it writes only the label (`type_label` / `domain_label`) and leaves the respective ID NULL. Operators or future reconciliation jobs can later assign the appropriate ID without losing the original free-form value.
+
+#### 7.2.1 Referential Semantics & Soft Delete Behavior (ST02)
+
+- `type_id` and `domain_id` are **canonical references**: once populated, EntryStore treats them as authoritative even if `type_label`/`domain_label` contain different text.  
+- If the referenced taxonomy row is deactivated (`active = FALSE`), Entries retain the ID and continue to surface the stored label (`type_label` or `domain_label`) as a human-friendly fallback. UI layers SHOULD indicate “inactive” status but MUST NOT drop the ID automatically.  
+- If a taxonomy row is hard-deleted, EntryStore leaves the Entry’s `type_id` / `domain_id` untouched (the ID becomes orphaned). EF-07 clients must handle this gracefully by falling back to free-form labels.  
+- Governance policy (captured under M03-T12) determines whether hard deletes are allowed; EF-06 simply stores the dangling ID for auditability.  
+- When reassigning taxonomy via API/worker flows, updates MUST set both the ID and label atomically so history remains consistent. This applies independently to both `type_id` and `domain_id`; partial updates (ID without label or vice versa) are rejected at the API surface.  
+- UI clients MUST display `domain_label` whenever `domain_id` is NULL or points to a deactivated record, and SHOULD offer reconciliation affordances so operators can choose a canonical `entry_domains.id` later without losing historical context.  
+- EF-05 SHOULD leave `domain_id` untouched when it cannot unambiguously determine the canonical domain; best-effort guesses belong in `domain_label`, avoiding accidental reclassification.
 
 ### 7.3 API / Worker Expectations
 
-- EF-05 semantic worker: when classification output includes a known taxonomy entry, persist both `type_id` and `type_label`. If no ID is found, leave `type_id = NULL` but still populate `type_label` and `semantic_tags`.  
-- EF-07 taxonomy endpoints (M03-T04/T05) MUST expose `entry_types` records with all fields above and honor `active` / `sort_order` semantics.  
-- UI clients use `entry_types` for dropdowns and write the chosen `id` back via EF-07. If a user enters a custom label that does not match an existing ID, EF-07 records it as label-only until governance promotes it to a canonical entry.
+- **EF-05 semantic worker:** When classification output includes a known taxonomy entry, persist both `type_id`/`type_label` and `domain_id`/`domain_label`. If no canonical ID is found for either dimension, leave the corresponding ID NULL but still populate the labels and semantic metadata. Best-effort guesses for domains belong only in `domain_label` to avoid polluting canonical IDs.  
+- **EF-07 taxonomy endpoints:** M03-T04/T05 MUST expose both `entry_types` and `entry_domains` collections with all schema fields defined in §7.1, honoring `active`, `sort_order`, and `metadata`. Responses SHOULD include pagination metadata and a `last_updated` cursor so UI caches can refresh efficiently.  
+- **Domain-specific API contract:** `POST /api/domains` mirrors `/api/types`: required fields are `id` (slug), `label`; optional fields include `name`, `description`, `sort_order`, `active`, and `metadata`. `PATCH /api/domains/{id}` MAY update any mutable column except `id`. Attempting to change `id` yields `400`. Deleting a domain either toggles `active=false` (default) or performs a hard delete only when governance policies allow; the API MUST warn when dependent entries still reference the ID.  
+- **Entry mutation payloads:** `POST /api/entries` and `PATCH /api/entries/{id}` MUST send taxonomy references as `{type_id, type_label}` and `{domain_id, domain_label}` pairs. Payloads with only one half of the pair are rejected (`422`) to keep EF-06 data consistent. UI clients that cannot supply an ID must explicitly set the ID field to `null` while retaining the label.  
+- **Dropdown / UI behavior:** UI clients use `/api/types` and `/api/domains` for authoritative dropdowns, writing the chosen IDs back through EF-07. If a user enters a custom label that does not match an existing ID, EF-07 stores the label-only value and leaves the ID NULL until governance promotes it to a canonical entry. Clients MUST surface when a previously selected ID becomes inactive so operators can decide whether to keep or remap it.
 
 ### 7.4 Indexing & Governance
 
 - Add indexes on `entry_types(active, sort_order)` and `entries(type_id)` so dashboards and filters remain performant.  
 - Governance artifacts (decision logs, status logs) MUST capture taxonomy naming conventions and deletion policies (see M03-T12).  
 - Future hierarchy/tag systems MUST build on these canonical IDs to maintain continuity with M03 assumptions.
+
+### 7.5 Migration Blueprint (ST03)
+
+- **Phase 1 — Schema & Table Prep:**
+  - Create `entry_types` and `entry_domains` with the columns defined in §7.1 (renaming legacy `type_labels` / `domain_labels` only after data backfill is complete).  
+  - If a legacy `domain_labels` table exists, add the missing columns (`id` slug, `active`, `sort_order`, `metadata`, timestamps) alongside the existing UUID primary key. Maintain writes through the old columns until Phase 2 finishes, then drop/rename legacy fields.  
+  - Add nullable `type_id`/`domain_id` columns to `entries` plus indexes on `entries(type_id)` and `entries(domain_id)` to protect query plans.  
+  - Add taxonomy-serving indexes: `entry_types(active, sort_order)`, `entry_domains(active, sort_order)` to keep dropdown queries cheap.
+- **Phase 2 — Data Backfill & Canonicalization:**
+  - Generate canonical slugs for every existing type/domain row using governance-approved naming rules; persist them into the new `id` column before enforcing NOT NULL.  
+  - Copy existing descriptive text/metadata into the new schema, ensuring `active` defaults TRUE and `sort_order` inherits existing UI ordering (or uses 500 when unknown).  
+  - For entries, leave `type_id`/`domain_id` NULL initially. A reconciliation script SHOULD capture the mapping between existing label strings and the new canonical IDs but **must not** rewrite entries until operators approve the mapping (see SD05 governance hooks).  
+  - Ensure EF-05 continues to write `type_label`/`domain_label` throughout the migration; deploy a canary worker version that also attempts to set IDs when they exist, guarding on NULL columns to keep pre-migration deployments compatible.
+- **Phase 3 — Application Wiring & Verification:**
+  - Flip EF-05 and EF-07 to require `{type_id, type_label}` / `{domain_id, domain_label}` pairs once schema changes are live in all environments. API validation rejects payloads that set an ID without the matching label to avoid inconsistent state.  
+  - Add smoke tests covering Entry creation/update with IDs, plus migration tests ensuring an Entry created pre-migration (labels only) can later accept an ID without data loss.  
+  - Document a rollback plan: drop `type_id`/`domain_id` columns and revert workers to label-only mode if taxonomy tables need to be disabled, ensuring migrations are wrapped in transactional scripts so partial deployments can be rolled back cleanly.
+
+### 7.6 Observability & Governance Hooks (ST05 / SD05)
+
+Taxonomy changes are governance-sensitive because they alter dropdowns, semantic hints, and referential integrity guarantees. EF-06 therefore MUST surface deterministically auditable telemetry any time Types or Domains mutate.
+
+#### 7.6.1 Logging & Capture Events
+
+- All mutations to `entry_types` and `entry_domains` MUST emit an INF-03 capture event *and* a structured log line. Required event topics:
+  - `taxonomy.type.created`, `taxonomy.type.updated`, `taxonomy.type.deactivated`, `taxonomy.type.reactivated`, `taxonomy.type.deleted`
+  - `taxonomy.domain.created`, `taxonomy.domain.updated`, `taxonomy.domain.deactivated`, `taxonomy.domain.reactivated`, `taxonomy.domain.deleted`
+- Each payload MUST include: `taxonomy_id`, `resource` (`type` | `domain`), `action`, `actor_id`/`actor_source`, `changes` (before/after diff), `referenced_entries` (count at mutation time), and `allow_taxonomy_delete` flag state. These payloads allow ETS-API cases to assert that delete gating and warning logic fired.
+- Structured log lines SHOULD reuse the same fields plus a monotonic `event_id` for cross-correlation. Logs MUST be written at INFO level for create/update and WARN for delete/deactivate operations.
+
+#### 7.6.2 Metrics & ETS Coverage
+
+- EF-06 MUST expose counters (via existing metrics emitter) for:
+  - `taxonomy_type_total` / `taxonomy_domain_total` (current active rows)
+  - `taxonomy_delete_blocked_total` (incremented whenever a delete attempt is rejected because dependencies exist or `ALLOW_TAXONOMY_DELETE` is `false`)
+  - `taxonomy_reconciliation_pending` (number of Entries whose `type_id`/`domain_id` is NULL while labels are non-null)
+- ETS scenarios map as follows:
+  - `ETS-DB-TAX-01` validates the `entry_types` telemetry (creation + deactivate + delete).
+  - `ETS-DB-TAX-02` mirrors the same for `entry_domains`.
+  - `ETS-API-TAX-01` asserts that API responses surface `deletion_warning` metadata when `referenced_entries > 0` and that the matching capture events/logs exist. ETS harnesses MUST be able to query capture-event storage using the topics above.
+
+#### 7.6.3 Governance Toggles & Workflows
+
+- A single configuration flag (`ALLOW_TAXONOMY_DELETE`, surfaced through INF-01) controls whether hard deletes are permitted in a runtime. EF-06/EF-07 MUST read this flag per request and block DELETE operations (HTTP 403 + structured warning) when false; deactivate remains allowed.
+- When a delete is allowed, EF-06 MUST capture `referenced_entries` count and include it in both the API response and the capture event so operators can prove that dangling IDs were acceptable at decision time.
+- Operators MUST document irreversible decisions (mass delete, renaming canonical IDs) in `pm/decisions/` referencing the event IDs emitted above. EF-06 therefore needs to store capture-event IDs (or log correlation IDs) alongside the mutation transaction so governance tooling can surface them later. Implementation note: persist `last_audit_event_id` columns on `entry_types`/`entry_domains` or make them derivable via INF-03 payloads.
+- Reconciliation jobs that backfill `type_id`/`domain_id` from labels count as mutations and MUST emit the `...updated` events with `changes.source = reconciliation`. This keeps the audit trail consistent with interactive API usage.

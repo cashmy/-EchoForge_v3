@@ -26,8 +26,8 @@
 
 ---
 
-## 1. Status Tracking Model  
-Each task contains a **Status Block**:
+## 1. Task Tracking Framework  
+Every task MUST contain a **Status Block**:
 
 ```markdown
 - **Status:** pending  <!-- pending | in_progress | blocked | deferred | done -->
@@ -35,7 +35,18 @@ Each task contains a **Status Block**:
 - **Notes:** —
 ```
 
-Codex-LLM MUST only edit these three fields.
+Codex-LLM MUST only edit these three fields when updating status.  
+For deeper planning, add an optional **Subtasks** section directly beneath the Description:
+
+```markdown
+#### Subtasks
+- [ ] ST01 — Short label (link to detailed plan doc)
+- [ ] ST02 — …
+```
+
+- Use the checklist for governance-visible tracking.  
+- Link each line to a supporting plan/ETS document (`pm/milestone_tasks/M03_T01_Subtask_Plan.md`, etc.) where detailed research, test matrices, and notes live.  
+- Keep the milestone file concise; put expanded rationale, research, and test plans in the linked document.
 
 ---
 
@@ -459,7 +470,7 @@ Subtasks:
 - **Type:** governance  
 - **Depends On:** Initial pipeline mechanics  
 - **Status Block:**
-  - **Status:** in_progress  
+  - **Status:** done 
   - **Last Updated:** 2025-12-07 — GPT-5.1-Codex  
   - **Notes:** Pending kickoff; awaiting M02 execution window.  
 
@@ -473,9 +484,9 @@ Create structured status logs reflecting milestone progress per MTS v1.1.
 - **Type:** governance  
 - **Depends On:** M02-T01 through M02-T12  
 - **Status Block:**  
-  - **Status:** in_progress  
-  - **Last Updated:** —  
-  - **Notes:** —  
+  - **Status:** done  
+  - **Last Updated:** 2025-12-09 — GPT-5.1-Codex  
+  - **Notes:** Decisions logged in `pm/decisions/2025-12-09_ef03_extraction_toolchain.md`, `..._ef04_normalization_profiles.md`, and `..._ef05_semantic_prompt_stack.md`.  
 
 **Description:**  
 Record decisions around LLM model selection, extraction tools, normalization strategy, and semantic prompt design.

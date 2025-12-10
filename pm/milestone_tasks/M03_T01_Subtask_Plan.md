@@ -10,11 +10,11 @@ _Milestone:_ M03 — Taxonomy & Classification Layer
 - `backend/app/jobs/semantic_worker.py` already persists `type_label` / `domain_label` metadata; when taxonomy IDs arrive, this worker (and EF-05 spec) will need a deterministic mapping, so the Type table must include stable identifiers + activation flags suitable for LLM hints.
 
 ## 2. Proposed Subtasks
-1. **ST01 — Schema Definition Addendum:** Author an EF06 spec addendum section that enumerates EntryType columns (`id`, `name`, `label`, `description`, `active`, `sort_order`, `created_at`, `updated_at`, optional `metadata` JSON). Include constraints (PK on `id`, unique `name`, default `active=true`, `sort_order` default 500).
-2. **ST02 — Referential Behavior & Soft Delete:** Define how Entries reference Types (`type_id` nullable, not FK), what happens when a Type is deactivated vs deleted, and how UI/API should surface dangling IDs. Document retention of free-form `type_label` for resilience.
-3. **ST03 — Migration Blueprint:** Outline the EF-06 migration steps (new `entry_types` table, seed rows optional, migrations for existing environments). Capture expected Alembic/SQL scripts and backfill strategy for historical data (e.g., map common `type_label` values to canonical IDs later).
-4. **ST04 — API Contract Alignment:** Map the schema to EF-07 endpoints (`GET/POST/PATCH/DELETE /api/types`). Specify validation rules, payload shapes, and how `active`/`sort_order` interplay with UI dropdowns.
-5. **ST05 — Governance & Observability:** Decide logging/metadata expectations (`capture_events` when `type_id` changes) and note any additional decision memos or config knobs required (e.g., reserved IDs, naming conventions).
+1. ✅ **ST01 — Schema Definition Addendum:** Author an EF06 spec addendum section that enumerates EntryType columns (`id`, `name`, `label`, `description`, `active`, `sort_order`, `created_at`, `updated_at`, optional `metadata` JSON). Include constraints (PK on `id`, unique `name`, default `active=true`, `sort_order` default 500).
+2. ✅ **ST02 — Referential Behavior & Soft Delete:** Define how Entries reference Types (`type_id` nullable, not FK), what happens when a Type is deactivated vs deleted, and how UI/API should surface dangling IDs. Document retention of free-form `type_label` for resilience.
+3. ✅ **ST03 — Migration Blueprint:** Outline the EF-06 migration steps (new `entry_types` table, seed rows optional, migrations for existing environments). Capture expected Alembic/SQL scripts and backfill strategy for historical data (e.g., map common `type_label` values to canonical IDs later).
+4. ✅ **ST04 — API Contract Alignment:** Map the schema to EF-07 endpoints (`GET/POST/PATCH/DELETE /api/types`). Specify validation rules, payload shapes, and how `active`/`sort_order` interplay with UI dropdowns.
+5. ✅ **ST05 — Governance & Observability:** Documented INF-03 capture events, metrics, and `ALLOW_TAXONOMY_DELETE` gating for Types in `EF06_EntryStore_Addendum_v1.2.md §7.6` so EF-07 controllers and ETS scenarios have a binding reference.
 
 ## 3. Initial Test Coverage (Pre-Coding)
 - **Unit — Entry Store Gateway:** Add tests to `tests/unit/test_entrystore_gateway.py` that create/read/update `EntryType` rows (using in-memory SQLite) and verify default values (`active=True`, auto timestamps) plus unique constraints.
@@ -23,7 +23,7 @@ _Milestone:_ M03 — Taxonomy & Classification Layer
 - **ETS-DB Scenario:** Define an ETS case (`ETS-DB-TAX-01`) that seeds a small set of EntryType rows, classifies Entries via `type_id`, then deactivates a Type to confirm entries stay readable. This scenario will later back the governance evidence for M03-T10.
 
 ## 4. Open Questions / Assumptions
-- Assume Type IDs are lowercase slugs (e.g., `architecture_note`); confirm with M03-T12 naming decision later.
+- Assume Type IDs are canonical once resolved (semantic inference or explicit user assignment). Entries without a matching taxonomy row keep only the free-form label (no ID). Naming scheme (slug vs other) will be finalized via M03-T12.
 - No hierarchical relationships in v1.1; if future requirements add parent-child, this plan will need an addendum.
 
 ## 5. Next Steps

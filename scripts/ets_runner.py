@@ -12,7 +12,11 @@ PROFILE_MATRIX = {
     "pipeline": {
         "marker": "ets_pipeline",
         "tests_path": "tests/ets",
-    }
+    },
+    "taxonomy": {
+        "marker": "ets_taxonomy",
+        "tests_path": "tests/ets",
+    },
 }
 
 
