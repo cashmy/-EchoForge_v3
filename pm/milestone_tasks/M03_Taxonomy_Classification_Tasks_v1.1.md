@@ -239,7 +239,6 @@ Implement `GET/POST/PATCH/DELETE` for Types and Domains per EF07 v1.2:
 - **Depends On:** M03-T03, EF07 v1.2  
 - **ETS Profiles:** ETS-API, ETS-UI  
 - **Status Block:**  
- - **Status Block:**  
   - **Status:** done  
   - **Last Updated:** 2025-12-10 — GPT-5.1-Codex  
   - **Notes:** Blueprint finalized; see `pm/milestone_tasks/M03_T06_Subtask_Plan.md` for the completed capture payload, PATCH contract, governance, and ETS matrix.
@@ -271,9 +270,9 @@ The goal is to give Codex-LLM a clear conceptual contract for how classification
 - **Depends On:** M03-T05  
 - **ETS Profiles:** ETS-API, ETS-UI  
 - **Status Block:**  
-  - **Status:** pending  
-  - **Last Updated:** —  
-  - **Notes:** —  
+  - **Status:** done  
+  - **Last Updated:** 2025-12-10 — GPT-5.1-Codex  
+  - **Notes:** SPA hydrates `/api/types|/api/domains` via `frontend/src/api/taxonomy.ts`, caches them in `useTaxonomyStore`, and now hides the `TaxonomyConsole` by default until `enable_taxonomy_refs_in_capture` is flipped on; health-check feature flags drive both the helper + dashboard badge, and Vitest store tests cover cache/refresh flows.  
 
 **Description:**  
 Ensure the Electron/SPA client can hydrate dropdowns and filter controls by calling:
@@ -286,6 +285,13 @@ Define any minimal client-side caching behavior and how “inactive” taxonomy 
 - New entry creation  
 - Editing existing entries that still reference deactivated IDs
 
+#### Subtasks
+- [x] ST01 — API/Data access blueprint (`pm/milestone_tasks/M03_T07_Subtask_Plan.md#2-proposed-subtasks`)
+- [x] ST02 — Desktop data store & feature flags (`pm/milestone_tasks/M03_T07_Subtask_Plan.md#2-proposed-subtasks`)
+- [x] ST03 — UI integration states (`pm/milestone_tasks/M03_T07_Subtask_Plan.md#2-proposed-subtasks`)
+- [x] ST04 — Governance/logging hooks (`pm/milestone_tasks/M03_T07_Subtask_Plan.md#2-proposed-subtasks`)
+- [x] ST05 — Validation & test matrix (`pm/milestone_tasks/M03_T07_Subtask_Plan.md#2-proposed-subtasks`)
+
 ---
 
 ### M03-T08 — EF-05 Semantic Suggestions (Optional in v1.1)
@@ -294,9 +300,9 @@ Define any minimal client-side caching behavior and how “inactive” taxonomy 
 - **Depends On:** EF-05, M02  
 - **ETS Profiles:** ETS-LLM  
 - **Status Block:**  
-  - **Status:** pending  
-  - **Last Updated:** —  
-  - **Notes:** —  
+  - **Status:** deferred  
+  - **Last Updated:** 2025-12-10 — GPT-5.1-Codex  
+  - **Notes:** Skipping for v1.1 to keep focus on operating the gated taxonomy console; revisit once capture workflow stabilizes and semantic hints have clearer operational requirements.  
 
 **Description:**  
 Define minimal semantic “hints” capability:
@@ -315,9 +321,9 @@ Document any changes needed in EF-05’s result shape to support this (e.g., `su
 - **Depends On:** M03-T03  
 - **ETS Profiles:** ETS-DB  
 - **Status Block:**  
-  - **Status:** pending  
-  - **Last Updated:** —  
-  - **Notes:** —  
+  - **Status:** done  
+  - **Last Updated:** 2025-12-10 — GPT-5.1-Codex  
+  - **Notes:** Alembic migration + EF06 addendum updates shipped; helper scripts (`scripts/seed_taxonomy_entries.py`, `scripts/collect_taxonomy_explain.py`, `scripts/show_index_scans.py`) captured in `pm/status_logs/Status_Log_M03_2025-12-10.md`, and MG06/MI99 breadcrumbs now track ETS follow-through.  
 
 **Description:**  
 Create indexes over:
@@ -330,6 +336,19 @@ to support:
 - Dashboard summary queries  
 - UI filtering for entry lists  
 - Efficient taxonomy-based searches.
+
+**Benefit Analysis (2025-12-10):**
+- **Critical read paths:** Dashboard filters and capture review tables will scan `entries` by `type_id`/`domain_id` on every refresh; without indexes, Postgres performs sequential scans that degrade rapidly as data grows (>100k rows projected by M04). Targeted indexes therefore turn the most common operator workflows into `index scan + bitmap heap`, keeping latency stable.
+- **Future taxonomy reporting:** Planned aggregates (per-type counts, inactive-reference sweeps) also rely on these predicates, so adding the indexes now avoids reintroducing risk once those features land.
+- **Operational overhead:** Each additional index adds ~8–12 bytes per row plus UPDATE/INSERT bookkeeping. Entry ingest volume is modest (a few thousand per day) and EF-06 already maintains adjacent indexes, so the incremental write cost is acceptable compared to the user-facing latency gains.
+- **Mitigation:** Index creation will be wrapped in a reversible migration with concurrent builds on production databases; if future telemetry shows low filter usage, indexes can be dropped with minimal effort. For now, the governance benefit (auditable taxonomy queries) outweighs the storage/write overhead.
+
+#### Subtasks
+- [x] ST01 — Migration blueprint (`pm/milestone_tasks/M03_T09_Subtask_Plan.md#2-proposed-subtasks`)
+- [x] ST02 — Alembic migration implementation (`pm/milestone_tasks/M03_T09_Subtask_Plan.md#2-proposed-subtasks`)
+- [x] ST03 — Spec/config documentation updates (`pm/milestone_tasks/M03_T09_Subtask_Plan.md#2-proposed-subtasks`)
+- [x] ST04 — Query validation & benchmarks (`pm/milestone_tasks/M03_T09_Subtask_Plan.md#2-proposed-subtasks`)
+- [x] ST05 — ETS/test hooks (`pm/milestone_tasks/M03_T09_Subtask_Plan.md#2-proposed-subtasks`)
 
 ---
 

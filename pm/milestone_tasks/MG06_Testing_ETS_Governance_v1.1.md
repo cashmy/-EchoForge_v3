@@ -83,6 +83,20 @@ Same as v1.0 (previous M06), unchanged — this milestone reclassifies, not rede
 
 (Full tasks preserved from M06 v1.0. No functional change, only milestone-classification change.)
 
+### MG06-TAX-IDX — Taxonomy Index Verification Hooks (Preview from M03)
+
+- **Status Block:**
+	- **Status:** pending
+	- **Last Updated:** 2025-12-10 — GPT-5.1-Codex
+	- **Notes:** Placeholder synced with M03-T09; aligns MG06 ETS scope with the helper scripts already landed in `/scripts`.  
+
+**Description:**
+- Once MG06 begins, integrate taxonomy-index validation into the ETS harness:
+	- Reuse `scripts/collect_taxonomy_explain.py` to capture plan evidence (ensuring `Index Scan using IDX_entries_*`).
+	- Invoke `scripts/show_index_scans.py` after ETS workloads to assert non-zero `idx_scan` counts via `pg_stat_user_indexes`.
+	- Archive outputs as MG06 audit artifacts and link them to ETS case IDs (planned `ETS-DB-TAX-IDX-01`).
+- No execution required until MG06 is scheduled; this entry ensures the work is not lost between milestones.
+
 ---
 
 ## 4. Exit Criteria

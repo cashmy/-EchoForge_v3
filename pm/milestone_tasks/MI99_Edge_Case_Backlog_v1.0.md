@@ -213,6 +213,57 @@ These refinements improve long-term usability but are explicitly marked **Nice-t
 
 ---
 
+### MI99-T12 — Full Test Sweep After M03 Completion
+
+- **Type:** testing / governance  
+- **Depends On:** Completion of M03 milestone deliverables  
+- **Status Block:**
+  - **Status:** pending  
+  - **Last Updated:** 2025-12-10 — GPT-5.1-Codex  
+  - **Notes:** Add a reminder to run the full pytest + ETS suite once M03 wraps to capture a dated verification record.  
+
+**Description:**  
+When M03 taxonomy work is declared done, execute a comprehensive automated test sweep (`pytest` unit/service suites plus ETS taxonomy profiles) and capture the results in the status log/CI evidence. This ensures feature-flag combinations and schema changes introduced across T01–T06 are validated together before moving into downstream milestones.
+
+---
+
+### MI99-T13 — Re-Enable Taxonomy Console Post-Capture Readiness
+
+- **Type:** follow-up / release gating  
+- **Depends On:** M03-T07 implementation, capture workflow stabilization  
+- **Status Block:**
+  - **Status:** pending  
+  - **Last Updated:** 2025-12-10 — GPT-5.1-Codex  
+  - **Notes:** Taxonomy console now ships hidden by default (`enable_taxonomy_refs_in_capture=false` in dev/desktop profiles); need explicit checklist to flip the flag back on once capture UI and auditing comfort are confirmed.  
+
+**Description:**  
+Track the operational review required before exposing the Taxonomy Console to operators. Deliverables:
+
+1. Capture workflow verification demonstrating taxonomy hints will not confuse current entry intake.  
+2. Sign-off from ops/ETS that console interactions are ready for broader use.  
+3. Config change (profiles + INF01 overrides) and release note documenting the feature flag enablement path.  
+4. Optional ETS/UI smoke run after the flag turns on.  
+
+---
+
+### MI99-T14 — MG06 Taxonomy Index ETS Prep
+
+- **Type:** governance / testing placeholder  
+- **Depends On:** Completion of M03-T09 ST05  
+- **Status Block:**
+  - **Status:** pending  
+  - **Last Updated:** 2025-12-10 — GPT-5.1-Codex  
+  - **Notes:** Carryover note so MG06 integrates the new helper scripts when ETS work starts.  
+
+**Description:**  
+Track the future action of wiring taxonomy-index verification into MG06 ETS suites:
+
+1. Use `scripts/collect_taxonomy_explain.py` + `scripts/show_index_scans.py` inside ETS workloads to capture plan/idx_scan evidence.  
+2. Attach outputs to the MG06 audit bundle (planned case `ETS-DB-TAX-IDX-01`).  
+3. Confirm documentation paths (`M03_T09_Subtask_Plan.md#10` and MG06 milestone file) stay aligned before MG06 kickoff.  
+
+---
+
 ## 3. Adding Future Edge-Case Tasks
 
 New edge items can be appended as `MI99-T0x` entries with the same Status Block structure. Reference any upstream decision or spec change so the history of why the item exists remains clear.

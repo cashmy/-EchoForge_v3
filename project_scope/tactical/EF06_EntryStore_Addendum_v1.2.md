@@ -247,7 +247,8 @@ domain_id VARCHAR(64) NULL  -- references entry_domains.id (M03-T02)
 
 ### 7.4 Indexing & Governance
 
-- Add indexes on `entry_types(active, sort_order)` and `entries(type_id)` so dashboards and filters remain performant.  
+- Add indexes on `entry_types(active, sort_order)` and `entry_domains(active, sort_order)` to keep dropdown queries cheap.  
+- Add Postgres indexes on `entries(type_id)` and `entries(domain_id)` plus a composite `entries(domain_id, type_id)` so capture filters, dashboard queries, and taxonomy reports avoid sequential scans even as the dataset grows.  
 - Governance artifacts (decision logs, status logs) MUST capture taxonomy naming conventions and deletion policies (see M03-T12).  
 - Future hierarchy/tag systems MUST build on these canonical IDs to maintain continuity with M03 assumptions.
 
