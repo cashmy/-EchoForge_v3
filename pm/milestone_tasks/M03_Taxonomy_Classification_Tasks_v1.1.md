@@ -94,10 +94,10 @@ Note in the spec that Types are **advisory**: Entries are not required to refere
 
 #### Subtasks
 - [x] ST01 — Document EntryType columns/constraints in EF06 addendum ([plan](pm/milestone_tasks/M03_T01_Subtask_Plan.md), see `EF06_EntryStore_Addendum_v1.2.md §7`)
-- [ ] ST02 — Specify referential behavior + soft delete semantics (link above)
-- [ ] ST03 — Outline EF-06 migration blueprint for EntryType table + optional seeding
-- [ ] ST04 — Map schema to EF-07 Types API payload/validation rules
-- [ ] ST05 — Capture governance/observability expectations (capture events, decision refs)
+- [x] ST02 — Specify referential behavior + soft delete semantics (see `EF06_EntryStore_Addendum_v1.2.md §7.2.1`)
+- [x] ST03 — Outline EF-06 migration blueprint for EntryType table + optional seeding (see `§7.5`)
+- [x] ST04 — Map schema to EF-07 Types API payload/validation rules (see `§7.3`)
+- [x] ST05 — Capture governance/observability expectations (capture events, decision refs; see `EF06_EntryStore_Addendum_v1.2.md §7.6`)
 
 
 ---
@@ -108,9 +108,9 @@ Note in the spec that Types are **advisory**: Entries are not required to refere
 - **Depends On:** M03-T01  
 - **ETS Profiles:** ETS-DB  
 - **Status Block:**  
-  - **Status:** pending  
-  - **Last Updated:** —  
-  - **Notes:** —  
+  - **Status:** in_progress  
+  - **Last Updated:** 2025-12-09 — GPT-5.1-Codex  
+  - **Notes:** Subtask/test plan captured in `pm/milestone_tasks/M03_T02_Subtask_Plan.md`; schema addendum work underway.  
 
 **Description:**  
 Define Domain taxonomy similarly:
@@ -124,6 +124,13 @@ Define Domain taxonomy similarly:
 
 Hierarchy is optional and out-of-scope for v1.1 (Domains are flat in this version).
 
+#### Subtasks
+- [x] SD01 — Document EntryDomain columns/constraints in EF06 addendum ([plan](pm/milestone_tasks/M03_T02_Subtask_Plan.md))
+- [x] SD02 — Define `domain_id` reference semantics + soft delete behavior (see plan)
+- [x] SD03 — Outline EF-06 migration blueprint for EntryDomain table + optional seeding
+- [x] SD04 — Map schema to EF-07 Domains API payload/validation rules
+- [x] SD05 — Capture governance/observability expectations + ETS hooks (see `EF06_EntryStore_Addendum_v1.2.md §7.6`)
+
 ---
 
 
@@ -134,9 +141,9 @@ Hierarchy is optional and out-of-scope for v1.1 (Domains are flat in this versio
 - **Depends On:** M03-T01, M03-T02  
 - **ETS Profiles:** ETS-DB  
 - **Status Block:**  
-  - **Status:** pending  
-  - **Last Updated:** —  
-  - **Notes:** —  
+  - **Status:** in_progress  
+  - **Last Updated:** 2025-12-09 — GPT-5.1-Codex  
+  - **Notes:** Subtask/test plan captured in `pm/milestone_tasks/M03_T03_Subtask_Plan.md`; EF06 addendum §7 already reflects TT01–TT03.  
 
 **Description:**  
 Extend EF-06 to include optional reference fields:
@@ -151,6 +158,13 @@ Document clearly:
 - Entries remain meaningful based on free-form labels even if the referenced Type/Domain is deleted.  
 - `type_id` and `domain_id` are hints for normalization and filtering, not strict foreign keys.
 
+#### Subtasks
+- [x] TT01 — Document reference columns in EF06 addendum (§7.2)  
+- [x] TT02 — Specify referential semantics + UI fallbacks (§7.2.1)  
+- [x] TT03 — Outline migration/indexing requirements (§7.4–§7.5)  
+- [x] TT04 — EntryStore gateway blueprint & file touch list (`pm/milestone_tasks/M03_T03_Subtask_Plan.md`)  
+- [x] TT05 — ETS/test coverage definition for taxonomy references (`pm/milestone_tasks/M03_T03_Subtask_Plan.md`)  
+
 ---
 
 ### M03-T04 — Define EF-07 Taxonomy API Contracts (Types/Domains)
@@ -159,9 +173,9 @@ Document clearly:
 - **Depends On:** M03-T01, M03-T02, EF07 v1.2  
 - **ETS Profiles:** ETS-API  
 - **Status Block:**  
-  - **Status:** pending  
-  - **Last Updated:** —  
-  - **Notes:** —  
+  - **Status:** in_progress  
+  - **Last Updated:** 2025-12-09 — GPT-5.1-Codex  
+  - **Notes:** Subtask/test plan in `pm/milestone_tasks/M03_T04_Subtask_Plan.md`; awaiting contract refinements in EF07 spec.  
 
 **Description:**  
 Align EF-07 taxonomy behavior with `EF07_Api_Contract_v1.2.md`:
@@ -183,6 +197,13 @@ Clarify in the spec:
 - `active = false` controls dropdown visibility.  
 - `DELETE` removes the taxonomy row but does not invalidate existing entries; clients must handle dangling IDs gracefully.
 
+#### Subtasks
+- [x] UT01 — Types endpoint contract deep-dive (`pm/milestone_tasks/M03_T04_Subtask_Plan.md`)  
+- [x] UT02 — Domains endpoint contract mirroring (`pm/milestone_tasks/M03_T04_Subtask_Plan.md`)  
+- [x] UT03 — Entry update expectations + payload rules (`pm/milestone_tasks/M03_T04_Subtask_Plan.md`)  
+- [x] UT04 — Observability & governance hooks (`pm/milestone_tasks/M03_T04_Subtask_Plan.md`)  
+- [x] UT05 — Test/ETS coverage definition (`pm/milestone_tasks/M03_T04_Subtask_Plan.md`)  
+
 ---
 
 ### M03-T05 — Implement Taxonomy CRUD Endpoints (EF-07)
@@ -191,9 +212,9 @@ Clarify in the spec:
 - **Depends On:** M03-T04  
 - **ETS Profiles:** ETS-API  
 - **Status Block:**  
-  - **Status:** pending  
-  - **Last Updated:** —  
-  - **Notes:** —  
+  - **Status:** done  
+  - **Last Updated:** 2025-12-10 — GPT-5.1-Codex  
+  - **Notes:** VT01–VT05 complete (router, validation, persistence, observability, and tests). See `pm/milestone_tasks/M03_T05_Subtask_Plan.md` for artifacts + coverage summary.  
 
 **Description:**  
 Implement `GET/POST/PATCH/DELETE` for Types and Domains per EF07 v1.2:
@@ -203,6 +224,13 @@ Implement `GET/POST/PATCH/DELETE` for Types and Domains per EF07 v1.2:
 - Hard delete via `DELETE` (optional, but supported).  
 - Logging via INF-03.
 
+#### Subtasks
+- [x] VT01 — Controller & routing skeletons (`pm/milestone_tasks/M03_T05_Subtask_Plan.md`)  
+- [x] VT02 — Validation & business rules (`.../M03_T05_Subtask_Plan.md`)
+- [x] VT03 — Persistence integration (`.../M03_T05_Subtask_Plan.md`)
+- [x] VT04 — Observability & capture events (`.../M03_T05_Subtask_Plan.md`)  
+- [x] VT05 — Tests & ETS hooks (`.../M03_T05_Subtask_Plan.md`)  
+
 ---
 
 ### M03-T06 — Define Entry Classification Update Mechanisms (Conceptual)
@@ -211,9 +239,10 @@ Implement `GET/POST/PATCH/DELETE` for Types and Domains per EF07 v1.2:
 - **Depends On:** M03-T03, EF07 v1.2  
 - **ETS Profiles:** ETS-API, ETS-UI  
 - **Status Block:**  
-  - **Status:** pending  
-  - **Last Updated:** —  
-  - **Notes:** —  
+ - **Status Block:**  
+  - **Status:** done  
+  - **Last Updated:** 2025-12-10 — GPT-5.1-Codex  
+  - **Notes:** Blueprint finalized; see `pm/milestone_tasks/M03_T06_Subtask_Plan.md` for the completed capture payload, PATCH contract, governance, and ETS matrix.
 
 **Description:**  
 Define how Entries will be classified and reclassified using taxonomy:
@@ -227,6 +256,12 @@ Define how Entries will be classified and reclassified using taxonomy:
   - Mark this as **future API work**, not part of v1.2 endpoints yet.
 
 The goal is to give Codex-LLM a clear conceptual contract for how classification should be applied, while keeping EF07 v1.2’s concrete API surface unchanged.
+
+#### Subtasks
+- [x] ST01 — Capture payload blueprint (`pm/milestone_tasks/M03_T06_Subtask_Plan.md`)
+- [x] ST02 — Entry PATCH contract draft (`pm/milestone_tasks/M03_T06_Subtask_Plan.md`)
+- [x] ST03 — Governance & observability notes (`pm/milestone_tasks/M03_T06_Subtask_Plan.md`)
+- [x] ST04 — Test/ETS matrix stub (`pm/milestone_tasks/M03_T06_Subtask_Plan.md`)
 
 ---
 
