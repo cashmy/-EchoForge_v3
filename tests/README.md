@@ -290,3 +290,13 @@ Document ETS outcomes (success timestamps, resulting transcript snippets, any de
 - **HTTP contract + actor metadata** — `tests/unit/test_taxonomy_api.py` verifies FastAPI endpoints honor `X-Actor-*` headers, return deletion warnings with `referenced_entries`, and respect the `ALLOW_TAXONOMY_DELETE` flag.
 - **Recommended command** — `pytest tests/unit/test_taxonomy_api.py tests/unit/test_taxonomy_service.py`
 
+#### ETS Profile — `taxonomy`
+- **Scope:** `tests/ets/test_taxonomy_crud.py`, `tests/ets/test_taxonomy_patch.py`, and the DB index proof `tests/ets/test_taxonomy_db_indexes.py` (skipped automatically unless a Postgres DSN is provided).
+- **Runner:** `python scripts/ets_runner.py --profile taxonomy`
+- **Environment:** set `ETS_TAXONOMY_DB_URL` (preferred) or `DATABASE_URL` so the ETS index test plus helper scripts can connect to Postgres. Without a DSN, the CRUD/patch ETS cases still run but the DB index test is skipped with a descriptive message.
+- **Helper scripts:**
+   - `scripts/seed_taxonomy_entries.py` — seeds synthetic entries via the shared `scripts/taxonomy_harness.py` helpers.
+   - `scripts/collect_taxonomy_explain.py` / `scripts/show_index_scans.py` — capture `EXPLAIN ANALYZE` output and `pg_stat_user_indexes.idx_scan` counts for audit trails.
+   - All helpers respect the same env vars as the ETS profile, so no additional configuration is needed beyond the DSN.
+- **Acceptance evidence:** capture a `scripts/ets_runner.py --profile taxonomy` console log showing the CRUD + patch tests passing and, when DB credentials are present, the index test proving `IDX_entries_type_id`, `IDX_entries_domain_id`, and `IDX_entries_domain_type` appear in plans with increasing scan counts.
+

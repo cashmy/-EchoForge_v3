@@ -53,6 +53,38 @@ def test_taxonomy_patch_updates_entry_and_records_event(monkeypatch):
     assert events[-1]["data"]["dimension"] == "domain"
 
 
+def test_taxonomy_patch_clear_emits_cleared_event(monkeypatch):
+    monkeypatch.setenv("ENABLE_TAXONOMY_PATCH", "1")
+    gateway = InMemoryEntryStoreGateway()
+    entry = gateway.create_entry(
+        source_type="document",
+        source_channel="manual_text",
+        source_path="/tmp/ets-doc-clear.txt",
+        metadata={"capture_fingerprint": "ets-tax-clear", "fingerprint_algo": "sha256"},
+    )
+    gateway.update_entry_taxonomy(
+        entry.entry_id,
+        type_id="legacy_type",
+        type_label="Legacy Type",
+        domain_id=None,
+        domain_label=None,
+    )
+    client = _build_client(gateway)
+
+    resp = client.patch(
+        f"/api/entries/{entry.entry_id}",
+        json={"taxonomy": {"type": {"clear": True}}},
+        headers={"X-Actor-Id": "ets", "X-Actor-Source": "suite"},
+    )
+
+    assert resp.status_code == 200
+    snapshot = gateway.get_entry(entry.entry_id)
+    assert snapshot.type_id is None and snapshot.type_label is None
+    events = snapshot.metadata.get("capture_events") or []
+    assert events[-1]["type"] == "taxonomy.reference.cleared"
+    assert events[-1]["data"]["dimension"] == "type"
+
+
 def test_taxonomy_patch_rejects_when_feature_disabled(monkeypatch):
     monkeypatch.delenv("ENABLE_TAXONOMY_PATCH", raising=False)
     gateway = InMemoryEntryStoreGateway()

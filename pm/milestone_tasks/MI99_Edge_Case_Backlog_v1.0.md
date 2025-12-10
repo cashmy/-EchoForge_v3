@@ -253,14 +253,14 @@ Track the operational review required before exposing the Taxonomy Console to op
 - **Status Block:**
   - **Status:** pending  
   - **Last Updated:** 2025-12-10 — GPT-5.1-Codex  
-  - **Notes:** Carryover note so MG06 integrates the new helper scripts when ETS work starts.  
+  - **Notes:** Carryover note so MG06 integrates the helper scripts + ETS docs (`tests/README.md#ets-profile-—-taxonomy`); executable proof now lives in `tests/ets/test_taxonomy_db_indexes.py`.  
 
 **Description:**  
 Track the future action of wiring taxonomy-index verification into MG06 ETS suites:
 
-1. Use `scripts/collect_taxonomy_explain.py` + `scripts/show_index_scans.py` inside ETS workloads to capture plan/idx_scan evidence.  
-2. Attach outputs to the MG06 audit bundle (planned case `ETS-DB-TAX-IDX-01`).  
-3. Confirm documentation paths (`M03_T09_Subtask_Plan.md#10` and MG06 milestone file) stay aligned before MG06 kickoff.  
+1. Use `scripts/collect_taxonomy_explain.py` + `scripts/show_index_scans.py` (or the shared helpers exposed via `scripts/taxonomy_harness.py`) inside ETS workloads to capture plan/idx_scan evidence.  
+2. Attach outputs to the MG06 audit bundle (planned case `ETS-DB-TAX-IDX-01`) and note the corresponding automated signal from `tests/ets/test_taxonomy_db_indexes.py`.  
+3. Confirm documentation paths (`M03_T09_Subtask_Plan.md#10`, MG06 milestone file, and the README section above) stay aligned before MG06 kickoff.  
 
 ---
 

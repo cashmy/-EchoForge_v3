@@ -88,13 +88,14 @@ Same as v1.0 (previous M06), unchanged — this milestone reclassifies, not rede
 - **Status Block:**
 	- **Status:** pending
 	- **Last Updated:** 2025-12-10 — GPT-5.1-Codex
-	- **Notes:** Placeholder synced with M03-T09; aligns MG06 ETS scope with the helper scripts already landed in `/scripts`.  
+	- **Notes:** Placeholder synced with M03-T09/T10; harness lives in `scripts/taxonomy_harness.py`, ETS docs in `tests/README.md#ets-profile-—-taxonomy`, and executable coverage in `tests/ets/test_taxonomy_db_indexes.py`.  
 
 **Description:**
 - Once MG06 begins, integrate taxonomy-index validation into the ETS harness:
-	- Reuse `scripts/collect_taxonomy_explain.py` to capture plan evidence (ensuring `Index Scan using IDX_entries_*`).
-	- Invoke `scripts/show_index_scans.py` after ETS workloads to assert non-zero `idx_scan` counts via `pg_stat_user_indexes`.
+	- Reuse `scripts/collect_taxonomy_explain.py` (or the shared helpers under `scripts/taxonomy_harness.py`) to capture plan evidence (ensuring `Index Scan using IDX_entries_*`).
+	- Invoke `scripts/show_index_scans.py` or call `fetch_index_scan_counts` directly after ETS workloads to assert non-zero `idx_scan` counts via `pg_stat_user_indexes`.
 	- Archive outputs as MG06 audit artifacts and link them to ETS case IDs (planned `ETS-DB-TAX-IDX-01`).
+	- Keep `tests/ets/test_taxonomy_db_indexes.py` green as a pre-flight check before any manual MG06 rehearsal.
 - No execution required until MG06 is scheduled; this entry ensures the work is not lost between milestones.
 
 ---

@@ -93,7 +93,7 @@ Define a flexible schema for the Type table, including fields minimally:
 Note in the spec that Types are **advisory**: Entries are not required to reference a Type.
 
 #### Subtasks
-- [x] ST01 — Document EntryType columns/constraints in EF06 addendum ([plan](pm/milestone_tasks/M03_T01_Subtask_Plan.md), see `EF06_EntryStore_Addendum_v1.2.md §7`)
+- [x] ST01 — Document EntryType columns/constraints in EF06 addendum (`pm/milestone_tasks/M03_T01_Subtask_Plan.md), see `EF06_EntryStore_Addendum_v1.2.md §7`)
 - [x] ST02 — Specify referential behavior + soft delete semantics (see `EF06_EntryStore_Addendum_v1.2.md §7.2.1`)
 - [x] ST03 — Outline EF-06 migration blueprint for EntryType table + optional seeding (see `§7.5`)
 - [x] ST04 — Map schema to EF-07 Types API payload/validation rules (see `§7.3`)
@@ -358,9 +358,9 @@ to support:
 - **Depends On:** M03-T05 through M03-T09  
 - **ETS Profiles:** ETS-API, ETS-DB  
 - **Status Block:**  
-  - **Status:** pending  
-  - **Last Updated:** —  
-  - **Notes:** —  
+  - **Status:** done  
+  - **Last Updated:** 2025-12-10 — GPT-5.1-Codex  
+  - **Notes:** All ST01–ST05 deliverables complete: CRUD + patch ETS suites, DB index test (`tests/ets/test_taxonomy_db_indexes.py`), env-aware harness/scripts, and documentation breadcrumbs (`tests/README.md`, `pm/status_logs/Status_Log_M03_2025-12-10.md`, MG06 + MI99 entries) describing how to rerun `scripts/ets_runner.py --profile taxonomy`.  
 
 **Description:**  
 Define and/or implement ETS test cases to validate:
@@ -371,6 +371,13 @@ Define and/or implement ETS test cases to validate:
 - Correct indexing and filtering in EF-06 for `type_id` and `domain_id`.  
 - Semantic suggestion flows (if M03-T08 is implemented).
 
+#### Subtasks
+- [x] ST01 — Scenario blueprint & catalog (`pm/milestone_tasks/M03_T10_Subtask_Plan.md#1-research-summary`)  
+- [x] ST02 — API CRUD & delete-warning ETS coverage (`tests/ets/test_taxonomy_crud.py`)  
+- [x] ST03 — Entry resilience & patch ETS coverage (`tests/ets/test_taxonomy_patch.py`)  
+- [x] ST04 — Index proof harness + DB ETS (`pm/milestone_tasks/M03_T10_Subtask_Plan.md#2-proposed-subtasks`)  
+- [x] ST05 — Documentation + governance updates (`pm/milestone_tasks/M03_T10_Subtask_Plan.md#2-proposed-subtasks`)  
+
 ---
 
 ### M03-T11 — Generate Status Log for M03
@@ -379,9 +386,9 @@ Define and/or implement ETS test cases to validate:
 - **Depends On:** At least some tasks in progress  
 - **ETS Profiles:** —  
 - **Status Block:**  
-  - **Status:** pending  
-  - **Last Updated:** —  
-  - **Notes:** —  
+  - **Status:** done  
+  - **Last Updated:** 2025-12-10 — GPT-5.1-Codex  
+  - **Notes:** Wrap-up captured in `pm/status_logs/Status_Log_M03_2025-12-10.md`, summarizing T01–T10 deliverables, ETS evidence, and pending follow-ups (MI99-T12/T13).  
 
 **Description:**  
 Create a status log entry under `pm/status_logs/` summarizing:
@@ -389,6 +396,7 @@ Create a status log entry under `pm/status_logs/` summarizing:
 - Current implementation progress for M03.  
 - Any blocked tasks or open questions.  
 - Any planned deferrals to later milestones.
+
 
 ---
 
@@ -398,9 +406,9 @@ Create a status log entry under `pm/status_logs/` summarizing:
 - **Depends On:** M03-T01 through M03-T10  
 - **ETS Profiles:** —  
 - **Status Block:**  
-  - **Status:** pending  
-  - **Last Updated:** —  
-  - **Notes:** —  
+  - **Status:** done  
+  - **Last Updated:** 2025-12-10 — GPT-5.1-Codex  
+  - **Notes:** Decision recorded in `pm/decisions/2025-12-10_taxonomy_naming_and_delete_policy.md` covering naming conventions, delete policy expectations, UI handling of inactive rows, and future hierarchy deferral.  
 
 **Description:**  
 Record design decisions under `pm/decisions/` regarding:
@@ -409,6 +417,7 @@ Record design decisions under `pm/decisions/` regarding:
 - Whether hard DELETE will be used in practice or reserved for rare cleanup scenarios.  
 - UI treatment of deactivated vs deleted taxonomy values.  
 - Any commitments about future hierarchy or tag systems.
+
 
 ---
 
