@@ -85,3 +85,7 @@ echo:
     preview_limit: 400
     extraction_output_root: "watch_roots/documents/extracted"
     extraction_public_base_url: null
+
+features:
+  enable_taxonomy_refs_in_capture: false
+  enable_taxonomy_patch: false

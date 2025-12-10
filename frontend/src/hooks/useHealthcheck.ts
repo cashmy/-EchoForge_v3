@@ -1,11 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../api/client";
-
-interface BackendStatus {
-  status: string;
-  entryStore?: string;
-  jobQueue?: string;
-}
+import { BackendStatus } from "../types/backend";
 
 export const useHealthcheck = () =>
   useQuery({

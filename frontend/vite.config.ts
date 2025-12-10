@@ -17,4 +17,12 @@ export default defineConfig({
     outDir: "dist",
     sourcemap: true,
   },
+  test: {
+    globals: true,
+    environment: "jsdom",
+    clearMocks: true,
+    coverage: {
+      reporter: ["text", "lcov"],
+    },
+  },
 });

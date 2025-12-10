@@ -1,10 +1,5 @@
 import { create } from "zustand";
-
-interface BackendStatus {
-  status: string;
-  entryStore?: string;
-  jobQueue?: string;
-}
+import { BackendStatus } from "../types/backend";
 
 interface AppState {
   backendStatus?: BackendStatus;

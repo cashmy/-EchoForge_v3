@@ -162,6 +162,7 @@ class Settings:
     llm: dict[str, Any] = field(default_factory=dict)
     logging: dict[str, Any] = field(default_factory=dict)
     echo: dict[str, Any] = field(default_factory=dict)
+    features: dict[str, Any] = field(default_factory=dict)
     raw: dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -214,6 +215,7 @@ def load_settings(
         llm=llm_cfg,
         logging=config_data.get("logging", {}),
         echo=echo_cfg,
+        features=config_data.get("features", {}),
         raw=config_data,
     )
     return settings
