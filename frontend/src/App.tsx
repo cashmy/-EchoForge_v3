@@ -1,10 +1,9 @@
 import { useEffect } from "react";
+import { RouterProvider } from "react-router-dom";
 import { useHealthcheck } from "./hooks/useHealthcheck";
 import { useAppStore } from "./state/useAppStore";
-import { ShellLayout } from "./components/ShellLayout";
-import { DashboardPage } from "./pages/DashboardPage";
-import { shouldShowTaxonomyConsole } from "./types/backend";
 import { useTaxonomyStore } from "./state/useTaxonomyStore";
+import { appRouter } from "./routes/router";
 
 const App = () => {
   const { data, isLoading } = useHealthcheck();
@@ -24,17 +23,15 @@ const App = () => {
     }
   }, [data, loadTaxonomy, setBackendStatus, setTaxonomyFlag]);
 
-  const showTaxonomyConsole = shouldShowTaxonomyConsole(data);
+  if (isLoading && !data) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-200">
+        Connecting to EchoForge backend…
+      </div>
+    );
+  }
 
-  return (
-    <ShellLayout>
-      {isLoading ? (
-        "Connecting…"
-      ) : (
-        <DashboardPage showTaxonomyConsole={showTaxonomyConsole} />
-      )}
-    </ShellLayout>
-  );
+  return <RouterProvider router={appRouter} />;
 };
 
 export default App;

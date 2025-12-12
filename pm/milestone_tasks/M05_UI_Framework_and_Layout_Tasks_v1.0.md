@@ -75,9 +75,9 @@ For deeper planning, add an optional **Subtasks** section directly beneath the D
 - **Depends On:** EF07_DesktopHostAdapter_Spec_v0.1.md, EF07_EchoForgeApiAndUi_Spec_v1.1.md  
 - **ETS Profiles:** ETS-Arch  
 - **Status Block:**  
-  - **Status:** pending  
-  - **Last Updated:** —  
-  - **Notes:** —  
+  - **Status:** done  
+  - **Last Updated:** 2025-12-10 — GPT-5.1-Codex  
+  - **Notes:** Documented Shape B boundary + dev guardrails in `project_scope/tactical/EF07_DesktopHostAdapter_Addendum_v0.1.md`.  
 
 **Description:**  
 Document a concise confirmation note that:
@@ -99,9 +99,9 @@ Output:
 - **Depends On:** M05-T01  
 - **ETS Profiles:** ETS-Arch, ETS-UX  
 - **Status Block:**  
-  - **Status:** pending  
-  - **Last Updated:** —  
-  - **Notes:** —  
+  - **Status:** done  
+  - **Last Updated:** 2025-12-10 — GPT-5.1-Codex  
+  - **Notes:** Locked stack + state strategy in `project_scope/tactical/UI_Framework_Selection_Note_v1.0.md`.  
 
 **Description:**  
 Make an explicit decision on:
@@ -121,9 +121,9 @@ Document tradeoffs and rationale in a short `UI_Framework_Selection_Note_v1.0.md
 - **Depends On:** M05-T02, M04-T01  
 - **ETS Profiles:** ETS-UX  
 - **Status Block:**  
-  - **Status:** pending  
-  - **Last Updated:** —  
-  - **Notes:** —  
+  - **Status:** done  
+  - **Last Updated:** 2025-12-10 — GPT-5.1-Codex  
+  - **Notes:** Defined layout/nav structure in `project_scope/tactical/UI_Layout_And_Navigation_v1.0.md`.  
 
 **Description:**  
 Design the top-level layout and navigation model, including:
@@ -149,9 +149,9 @@ Output:
 - **Depends On:** M05-T03  
 - **ETS Profiles:** ETS-UI  
 - **Status Block:**  
-  - **Status:** pending  
-  - **Last Updated:** —  
-  - **Notes:** —  
+  - **Status:** done  
+  - **Last Updated:** 2025-12-10 — GPT-5.1-Codex  
+  - **Notes:** AppShell + hash router scaffold landed (`frontend/src/layout` + `src/routes/router.tsx`), placeholders wired for dashboard/entries/detail/settings.  
 
 **Description:**  
 Implement:
@@ -176,9 +176,9 @@ Ensure:
 - **Depends On:** M05-T02  
 - **ETS Profiles:** ETS-UX, ETS-UI  
 - **Status Block:**  
-  - **Status:** pending  
-  - **Last Updated:** —  
-  - **Notes:** —  
+  - **Status:** done  
+  - **Last Updated:** 2025-12-10 — GPT-5.1-Codex  
+  - **Notes:** Light/dark/system theming wired via `frontend/src/styles/global.css`, `src/state/useUiLayoutStore.ts`, and AppShell layout.  
 
 **Description:**  
 Implement a minimal theming system:
@@ -198,9 +198,9 @@ Tailwind configuration and any MUI theme overrides (if used) should be updated a
 - **Depends On:** M04-T04, M05-T04  
 - **ETS Profiles:** ETS-API, ETS-UI  
 - **Status Block:**  
-  - **Status:** pending  
-  - **Last Updated:** —  
-  - **Notes:** —  
+  - **Status:** done  
+  - **Last Updated:** 2025-12-10 — GPT-5.1-Codex  
+  - **Notes:** Dashboard now renders live summary data via `useDashboardSummary` + refreshed `DashboardPage.tsx` sections (pipeline, cognitive, taxonomy, momentum, recent activity).  
 
 **Description:**  
 Implement the Dashboard page:
@@ -221,9 +221,10 @@ Keep designs simple and information-dense; visual polish may be deferred.
 - **Depends On:** M04-T02, M04-T05, M05-T04  
 - **ETS Profiles:** ETS-API, ETS-UI  
 - **Status Block:**  
-  - **Status:** pending  
-  - **Last Updated:** —  
-  - **Notes:** —  
+ - **Status Block:**  
+  - **Status:** done  
+  - **Last Updated:** 2025-12-10 — GPT-5.1-Codex  
+  - **Notes:** Entries workspace now consumes `/api/entries` via `frontend/src/pages/EntriesListPage.tsx`, `frontend/src/hooks/useEntriesSearch.ts`, and `frontend/src/api/entries.ts`; vitest run covers regression.  
 
 **Description:**  
 Implement the main Entries list view:
@@ -247,9 +248,10 @@ Ensure consistent behavior with the API semantics described in EF07 and M04.
 - **Depends On:** EF06 specs, M02 pipeline tasks, M05-T07  
 - **ETS Profiles:** ETS-UI  
 - **Status Block:**  
-  - **Status:** pending  
-  - **Last Updated:** —  
-  - **Notes:** —  
+ - **Status Block:**  
+  - **Status:** done  
+  - **Last Updated:** 2025-12-10 — GPT-5.1-Codex  
+  - **Notes:** `/api/entries/{id}` + React Query detail view delivered (`backend/app/api/routers/entries.py`, `frontend/src/pages/EntryDetailPage.tsx`, `frontend/src/hooks/useEntryDetail.ts`, `frontend/src/layout/SecondaryPanel.tsx`).  
 
 **Description:**  
 Implement a detail view for a single Entry:
@@ -271,9 +273,10 @@ Use read-only views for v1; edits can be deferred to a later milestone unless ex
 - **Depends On:** M05-T06, M05-T07  
 - **ETS Profiles:** ETS-UX, ETS-UI  
 - **Status Block:**  
-  - **Status:** pending  
-  - **Last Updated:** —  
-  - **Notes:** —  
+ - **Status Block:**  
+  - **Status:** done  
+  - **Last Updated:** 2025-12-10 — GPT-5.1-Codex  
+  - **Notes:** Added router error boundary + route-loading bar and reinforced page-level states (`frontend/src/pages/RouteErrorPage.tsx`, `frontend/src/routes/router.tsx`, `frontend/src/layout/AppShell.tsx`, dashboard/entries/detail fallbacks).  
 
 **Description:**  
 Implement:
@@ -288,15 +291,75 @@ Error messaging should be helpful but not overwhelming, and should not expose ra
 
 ---
 
+### M05-T09a — Taxonomy Type Management UI
+
+- **Type:** implementation  
+- **Depends On:** M03 taxonomy readiness, EF07 taxonomy APIs  
+- **ETS Profiles:** ETS-UI, ETS-API  
+- **Status Block:**  
+  - **Status:** pending  
+  - **Last Updated:** —  
+  - **Notes:** —  
+
+**Description:**  
+Add a dedicated Types workspace reachable from the sidebar (e.g., `Taxonomy ▸ Types`). Requirements:
+
+- Filter/search controls (text input + include-inactive toggle) so long lists stay manageable.  
+- Card-based listing (future-proofed for icons) that surfaces label, slug, status, sort order, and quick actions.  
+- Full CRUD flows: Add/Edit modals, Delete confirmation banner, loading/error states wired through React Query.  
+- Optimistic updates where safe, with server reconciliation when API responses differ.  
+
+---
+
+### M05-T09b — Taxonomy Domain Management UI
+
+- **Type:** implementation  
+- **Depends On:** M05-T09a shared components  
+- **ETS Profiles:** ETS-UI, ETS-API  
+- **Status Block:**  
+  - **Status:** pending  
+  - **Last Updated:** —  
+  - **Notes:** —  
+
+**Description:**  
+Mirror the Types experience for Domains:
+
+- Sidebar entry + page shell dedicated to Domains.  
+- Reuse the card layout (with optional icon slot) plus filters.  
+- Modal-driven Add/Edit with validation for slug uniqueness and activation state.  
+- Delete confirmation that highlights downstream impact when available.  
+
+---
+
+### M05-T09c — Manual Entry Workspace
+
+- **Type:** implementation  
+- **Depends On:** EF01 capture APIs, M05 layout shell  
+- **ETS Profiles:** ETS-UI, ETS-API  
+- **Status Block:**  
+  - **Status:** pending  
+  - **Last Updated:** —  
+  - **Notes:** —  
+
+**Description:**  
+Deliver a full “Add Entry” page (linked from the Entries header button and sidebar):
+
+- Form sections for metadata (title, source type/channel), content (text area or file reference), and taxonomy selectors.  
+- Submission UX (saving indicators, success toast, validation errors) plus option to return to Entries list.  
+- Placeholder integration acceptable initially; final wiring will post to the manual capture API once EF01 exposes it.  
+
+---
+
 ### M05-T10 — Electron Host Integration Smoke Test
 
 - **Type:** test  
 - **Depends On:** M05-T04, M05-T06, M05-T07  
 - **ETS Profiles:** ETS-API, ETS-UX  
 - **Status Block:**  
-  - **Status:** pending  
-  - **Last Updated:** —  
-  - **Notes:** —  
+ - **Status Block:**  
+  - **Status:** blocked  
+  - **Last Updated:** 2025-12-10 — GPT-5.1-Codex  
+  - **Notes:** Blocked until taxonomy CRUD (type/domain), manual entry capture, and watcher ingest→pipeline UI visibility are ready; plan drafted but requires those flows before Electron smoke test adds value.  
 
 **Description:**  
 Perform a basic end-to-end smoke test in the Electron host:

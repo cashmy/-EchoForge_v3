@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
@@ -11,12 +11,18 @@ __all__ = [
     "Entry",
     "utcnow",
 ]
+_LAST_UTCNOW: datetime | None = None
 
 
 def utcnow() -> datetime:
-    """Return timezone-aware UTC timestamp."""
+    """Return timezone-aware UTC timestamp with monotonic guarantees."""
 
-    return datetime.now(timezone.utc)
+    global _LAST_UTCNOW
+    now = datetime.now(timezone.utc)
+    if _LAST_UTCNOW is not None and now <= _LAST_UTCNOW:
+        now = _LAST_UTCNOW + timedelta(microseconds=1)
+    _LAST_UTCNOW = now
+    return now
 
 
 @dataclass(frozen=True)

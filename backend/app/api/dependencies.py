@@ -66,11 +66,11 @@ def get_actor_context(request: Request) -> ActorContext:
 
 @lru_cache()
 def _taxonomy_service_singleton() -> TaxonomyService:
-    allow_delete = os.getenv("ALLOW_TAXONOMY_DELETE", "0").lower() in {
-        "1",
-        "true",
-        "yes",
-    }
+    env_value = os.getenv("ALLOW_TAXONOMY_DELETE")
+    if env_value is None:
+        allow_delete = True
+    else:
+        allow_delete = env_value.lower() in {"1", "true", "yes"}
     repository = PostgresTaxonomyRepository()
     return TaxonomyService(
         allow_hard_delete=allow_delete,

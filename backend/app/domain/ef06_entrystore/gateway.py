@@ -2,10 +2,23 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import dataclass, replace
+from datetime import datetime
 from typing import Any, Dict, List, Mapping, Optional, Protocol, Tuple
 
-from sqlalchemy import MetaData, Table, insert, select, update
+from sqlalchemy import (
+    MetaData,
+    Table,
+    Text,
+    and_,
+    cast,
+    func,
+    insert,
+    literal_column,
+    or_,
+    select,
+    update,
+)
 from sqlalchemy.engine import Engine
 
 from ...infra.db import ENGINE
@@ -18,10 +31,44 @@ __all__ = [
     "FingerprintReadableGateway",
     "InMemoryEntryStoreGateway",
     "PostgresEntryStoreGateway",
+    "EntrySearchFilters",
+    "EntrySearchResult",
     "build_entry_store_gateway",
 ]
 
 logger = get_logger(__name__)
+
+
+@dataclass(frozen=True)
+class EntrySearchFilters:
+    """Normalized filter set for `/api/entries` queries."""
+
+    terms: tuple[str, ...] = tuple()
+    type_ids: tuple[str, ...] = tuple()
+    domain_ids: tuple[str, ...] = tuple()
+    type_labels: tuple[str, ...] = tuple()
+    domain_labels: tuple[str, ...] = tuple()
+    pipeline_statuses: tuple[str, ...] = tuple()
+    cognitive_statuses: tuple[str, ...] = tuple()
+    source_channels: tuple[str, ...] = tuple()
+    source_types: tuple[str, ...] = tuple()
+    created_from: datetime | None = None
+    created_to: datetime | None = None
+    updated_from: datetime | None = None
+    updated_to: datetime | None = None
+    include_archived: bool = False
+    sort_by: str = "updated_at"
+    sort_dir: str = "desc"
+    limit: int = 20
+    offset: int = 0
+
+
+@dataclass(frozen=True)
+class EntrySearchResult:
+    """Container for paginated entry search results."""
+
+    items: List[Entry]
+    total: int
 
 
 class EntryStoreGateway(Protocol):  # pragma: no cover
@@ -139,6 +186,8 @@ class EntryStoreGateway(Protocol):  # pragma: no cover
     ) -> Entry: ...
 
     def get_entry(self, entry_id: str) -> Entry: ...
+
+    def search_entries(self, filters: EntrySearchFilters) -> EntrySearchResult: ...
 
 
 class FingerprintReadableGateway(Protocol):  # pragma: no cover
@@ -459,6 +508,82 @@ class InMemoryEntryStoreGateway(EntryStoreGateway, FingerprintReadableGateway):
             raise KeyError(f"Entry {entry_id} not found")
         return record
 
+    def search_entries(self, filters: EntrySearchFilters) -> EntrySearchResult:
+        records = list(self._entries.values())
+        matching = [
+            entry for entry in records if self._match_search_filters(entry, filters)
+        ]
+        reverse = filters.sort_dir.lower() == "desc"
+        matching.sort(
+            key=lambda entry: (
+                self._sort_value(entry, filters.sort_by),
+                entry.entry_id,
+            ),
+            reverse=reverse,
+        )
+        start = min(max(filters.offset, 0), len(matching))
+        end = min(start + max(filters.limit, 0), len(matching))
+        return EntrySearchResult(items=matching[start:end], total=len(matching))
+
+    def _match_search_filters(self, entry: Entry, filters: EntrySearchFilters) -> bool:
+        if not filters.include_archived and _entry_is_archived(entry):
+            return False
+        if filters.type_ids and (entry.type_id or "") not in filters.type_ids:
+            return False
+        if filters.domain_ids and (entry.domain_id or "") not in filters.domain_ids:
+            return False
+        if filters.type_labels and not _label_matches(
+            entry.type_label, filters.type_labels
+        ):
+            return False
+        if filters.domain_labels and not _label_matches(
+            entry.domain_label, filters.domain_labels
+        ):
+            return False
+        if (
+            filters.pipeline_statuses
+            and entry.pipeline_status not in filters.pipeline_statuses
+        ):
+            return False
+        if (
+            filters.cognitive_statuses
+            and entry.cognitive_status not in filters.cognitive_statuses
+        ):
+            return False
+        if (
+            filters.source_channels
+            and entry.source_channel not in filters.source_channels
+        ):
+            return False
+        if filters.source_types and entry.source_type not in filters.source_types:
+            return False
+        if filters.created_from and entry.created_at < filters.created_from:
+            return False
+        if filters.created_to and entry.created_at > filters.created_to:
+            return False
+        if filters.updated_from and entry.updated_at < filters.updated_from:
+            return False
+        if filters.updated_to and entry.updated_at > filters.updated_to:
+            return False
+        if filters.terms:
+            haystack_parts = [
+                entry.display_title or "",
+                entry.summary or "",
+                entry.verbatim_preview or "",
+                entry.normalized_text or "",
+                " ".join(entry.semantic_tags or []),
+            ]
+            haystack = " ".join(part for part in haystack_parts if part).lower()
+            if not all(term in haystack for term in filters.terms):
+                return False
+        return True
+
+    def _sort_value(self, entry: Entry, sort_by: str):
+        value = getattr(entry, sort_by, None)
+        if isinstance(value, str):
+            return value.lower()
+        return value
+
 
 class PostgresEntryStoreGateway(EntryStoreGateway, FingerprintReadableGateway):
     """SQLAlchemy-backed adapter that persists entries to PostgreSQL."""
@@ -476,6 +601,7 @@ class PostgresEntryStoreGateway(EntryStoreGateway, FingerprintReadableGateway):
         else:
             self._metadata = MetaData()
             self._entries = Table("entries", self._metadata, autoload_with=self._engine)
+        self._is_archived_col = getattr(self._entries.c, "is_archived", None)
 
     # ------------------------------------------------------------------
     # Entry creation + lookups
@@ -576,6 +702,102 @@ class PostgresEntryStoreGateway(EntryStoreGateway, FingerprintReadableGateway):
         with self._engine.begin() as conn:
             row = self._fetch_entry(conn, entry_id)
         return _row_to_entry(row)
+
+    def search_entries(self, filters: EntrySearchFilters) -> EntrySearchResult:
+        table = self._entries
+        conditions = self._build_search_conditions(filters)
+        sort_column = self._resolve_sort_column(filters.sort_by)
+        order_clause = (
+            sort_column.desc()
+            if filters.sort_dir.lower() == "desc"
+            else sort_column.asc()
+        )
+        secondary_order = table.c.entry_id.desc()
+        limit_value = max(filters.limit, 1)
+        offset_value = max(filters.offset, 0)
+        stmt = (
+            select(table)
+            .where(*conditions)
+            .order_by(order_clause, secondary_order)
+            .offset(offset_value)
+            .limit(limit_value)
+        )
+        count_stmt = select(func.count()).select_from(table).where(*conditions)
+        with self._engine.begin() as conn:
+            rows = conn.execute(stmt).mappings().all()
+            total = int(conn.execute(count_stmt).scalar_one())
+        return EntrySearchResult(
+            items=[_row_to_entry(row) for row in rows],
+            total=total,
+        )
+
+    def _build_search_conditions(self, filters: EntrySearchFilters) -> tuple:
+        c = self._entries.c
+        conditions: list[Any] = []
+        if filters.type_ids:
+            conditions.append(c.type_id.in_(filters.type_ids))
+        if filters.domain_ids:
+            conditions.append(c.domain_id.in_(filters.domain_ids))
+        if filters.type_labels:
+            label_exprs = [
+                func.lower(c.type_label).like(f"%{label}%")
+                for label in filters.type_labels
+            ]
+            conditions.append(or_(*label_exprs))
+        if filters.domain_labels:
+            label_exprs = [
+                func.lower(c.domain_label).like(f"%{label}%")
+                for label in filters.domain_labels
+            ]
+            conditions.append(or_(*label_exprs))
+        if filters.pipeline_statuses:
+            conditions.append(c.pipeline_status.in_(filters.pipeline_statuses))
+        if filters.cognitive_statuses:
+            conditions.append(c.cognitive_status.in_(filters.cognitive_statuses))
+        if filters.source_channels:
+            conditions.append(c.source_channel.in_(filters.source_channels))
+        if filters.source_types:
+            conditions.append(c.source_type.in_(filters.source_types))
+        if filters.created_from is not None:
+            conditions.append(c.created_at >= filters.created_from)
+        if filters.created_to is not None:
+            conditions.append(c.created_at <= filters.created_to)
+        if filters.updated_from is not None:
+            conditions.append(c.updated_at >= filters.updated_from)
+        if filters.updated_to is not None:
+            conditions.append(c.updated_at <= filters.updated_to)
+        if not filters.include_archived and self._is_archived_col is not None:
+            conditions.append(self._is_archived_col.is_(False))
+        if filters.terms:
+            searchable_columns = [
+                c.display_title,
+                c.summary,
+                c.verbatim_preview,
+                c.normalized_text,
+            ]
+            semantic_col = getattr(c, "semantic_tags", None)
+            if semantic_col is not None:
+                searchable_columns.append(cast(semantic_col, Text))
+            for term in filters.terms:
+                like_value = f"%{term}%"
+                term_exprs = [
+                    func.lower(column).like(like_value)
+                    for column in searchable_columns
+                    if column is not None
+                ]
+                if term_exprs:
+                    conditions.append(or_(*term_exprs))
+        return tuple(conditions)
+
+    def _resolve_sort_column(self, sort_by: str):
+        columns = {
+            "created_at": self._entries.c.created_at,
+            "updated_at": self._entries.c.updated_at,
+            "display_title": self._entries.c.display_title,
+            "pipeline_status": self._entries.c.pipeline_status,
+            "cognitive_status": self._entries.c.cognitive_status,
+        }
+        return columns.get(sort_by, self._entries.c.updated_at)
 
     # ------------------------------------------------------------------
     # Pipeline + transcription updates
@@ -1082,6 +1304,24 @@ def _row_to_entry(row: Mapping[str, Any]) -> Entry:
         classification_model=row.get("classification_model"),
         is_classified=bool(row.get("is_classified")),
     )
+
+
+def _entry_is_archived(entry: Entry) -> bool:
+    metadata = entry.metadata or {}
+    if "is_archived" in metadata:
+        return bool(metadata.get("is_archived"))
+    capture_meta = metadata.get("capture_metadata") or {}
+    archived_flag = capture_meta.get("is_archived")
+    if archived_flag is None:
+        return False
+    return bool(archived_flag)
+
+
+def _label_matches(value: Optional[str], needles: tuple[str, ...]) -> bool:
+    if value is None:
+        return False
+    haystack = value.lower()
+    return any(term in haystack for term in needles)
 
 
 PIPELINE_TRANSITION_EVENT = "pipeline_status_changed"

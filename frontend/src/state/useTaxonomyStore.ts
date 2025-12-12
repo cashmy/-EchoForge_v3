@@ -98,7 +98,6 @@ const emitTelemetry = (event: string, detail: Record<string, unknown>) => {
     );
   }
   if (import.meta.env.DEV) {
-    // eslint-disable-next-line no-console
     console.info(`[telemetry] ${event}`, detail);
   }
 };

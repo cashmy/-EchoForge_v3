@@ -269,9 +269,9 @@ Track the future action of wiring taxonomy-index verification into MG06 ETS suit
 - **Type:** implementation backlog  
 - **Depends On:** M04-T05 plan, frontend readiness for search UI  
 - **Status Block:**
-  - **Status:** pending  
-  - **Last Updated:** 2025-12-10 — GPT-5.1-Codex  
-  - **Notes:** Deferred until frontend implementation resumes; see `pm/milestone_tasks/M04_T05_Subtask_Plan.md` for latest context.  
+  - **Status:** done
+  - **Last Updated:** 2025-12-10 — GPT-5.1-Codex
+  - **Notes:** Closed via `/api/entries` implementation + regression tests (`backend/app/api/routers/entries.py`, `backend/app/domain/ef06_entrystore/*`, `tests/unit/test_entries_api.py`).  
 
 **Description:**  
 Finalize `/api/entries` search/filter endpoint once frontend work resumes, ensuring API semantics align with the documented plan (query builder, validation, pagination, ETS hooks). This includes wiring FastAPI responses, EF-06 query helpers, and initial regression tests before UI consumption.
@@ -287,9 +287,9 @@ Finalize `/api/entries` search/filter endpoint once frontend work resumes, ensur
 - **Type:** UI backlog  
 - **Depends On:** M04-T06 plan, frontend shell availability  
 - **Status Block:**
-  - **Status:** pending  
-  - **Last Updated:** 2025-12-10 — GPT-5.1-Codex  
-  - **Notes:** Waiting for Electron/SPA scaffolding; refer to `pm/milestone_tasks/M04_T06_Subtask_Plan.md`.  
+  - **Status:** done
+  - **Last Updated:** 2025-12-10 — GPT-5.1-Codex
+  - **Notes:** Dashboard + entries UI wiring merged (`frontend/src/pages/DashboardPage.tsx`, `frontend/src/pages/EntriesListPage.tsx`, `frontend/src/hooks/useEntriesSearch.ts`, `frontend/src/api/entries.ts`) with `npx vitest run` verification.  
 
 **Description:**  
 Implement dashboard widgets and entry list filters in the EF-07 desktop UI once the frontend is operational. Work covers API integration, state management, zero-states, and pagination ergonomics matching the backend contracts.

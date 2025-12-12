@@ -207,12 +207,12 @@ Ensure:
 - **Depends On:** M04-T02, M04-T03  
 - **ETS Profiles:** ETS-API, ETS-DB  
 - **Status Block:**  
-  - **Status:** pending  
-  - **Last Updated:** —  
-  - **Notes:** —  
+  - **Status:** done  
+  - **Last Updated:** 2025-12-10  
+  - **Notes:** `/api/entries` now supports spec-compliant search, filters, and pagination with gateway coverage + `tests/unit/test_entries_api.py` regression suite.  
 #### Subtasks
-- [ ] ST01 — Implement `/api/entries` query/filter builder + gateway wiring
-- [ ] ST02 — Add ETS/API tests for filters, pagination, and archived behavior
+- [x] ST01 — Implement `/api/entries` query/filter builder + gateway wiring
+- [x] ST02 — Add ETS/API tests for filters, pagination, and archived behavior
 
 **Description:**  
 Implement `/api/entries` semantics as defined in M04-T02:
@@ -233,12 +233,13 @@ Implement `/api/entries` semantics as defined in M04-T02:
 - **Depends On:** M04-T04, M04-T05, M03-T07  
 - **ETS Profiles:** ETS-UI  
 - **Status Block:**  
-  - **Status:** pending  
-  - **Last Updated:** —  
-  - **Notes:** —  
+ - **Status Block:**  
+  - **Status:** done  
+  - **Last Updated:** 2025-12-10 — GPT-5.1-Codex  
+  - **Notes:** Dashboard + entries UI now read live data via React Query (`frontend/src/pages/DashboardPage.tsx`, `frontend/src/pages/EntriesListPage.tsx`, `frontend/src/hooks/useEntriesSearch.ts`, `frontend/src/api/entries.ts`); `npx vitest run` verifies wiring.  
 #### Subtasks
-- [ ] ST01 — Wire dashboard widgets to `/api/dashboard/summary`
-- [ ] ST02 — Wire entry list + filters to `/api/entries`
+- [x] ST01 — Wire dashboard widgets to `/api/dashboard/summary`
+- [x] ST02 — Wire entry list + filters to `/api/entries`
 
 **Description:**  
 Implement the frontend wiring to:

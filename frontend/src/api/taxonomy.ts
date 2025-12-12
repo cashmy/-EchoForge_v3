@@ -27,6 +27,20 @@ export interface FetchTaxonomyOptions {
   sortDir?: "asc" | "desc";
 }
 
+export interface TaxonomyCreatePayload {
+  id: string;
+  label: string;
+  name?: string;
+  description?: string | null;
+  sort_order?: number;
+  metadata?: Record<string, unknown> | null;
+  active?: boolean;
+}
+
+export type TaxonomyUpdatePayload = Partial<
+  Omit<TaxonomyCreatePayload, "id"> & { active: boolean }
+>;
+
 export const fetchTaxonomyList = async (
   kind: "types" | "domains",
   options: FetchTaxonomyOptions = {}
@@ -45,4 +59,31 @@ export const fetchTaxonomyList = async (
     `/${kind}?${params.toString()}`
   );
   return response.data;
+};
+
+export const createTaxonomyRecord = async (
+  kind: "types" | "domains",
+  payload: TaxonomyCreatePayload
+): Promise<TaxonomyRecord> => {
+  const response = await apiClient.post<TaxonomyRecord>(`/${kind}`, payload);
+  return response.data;
+};
+
+export const updateTaxonomyRecord = async (
+  kind: "types" | "domains",
+  id: string,
+  payload: TaxonomyUpdatePayload
+): Promise<TaxonomyRecord> => {
+  const response = await apiClient.patch<TaxonomyRecord>(
+    `/${kind}/${id}`,
+    payload
+  );
+  return response.data;
+};
+
+export const deleteTaxonomyRecord = async (
+  kind: "types" | "domains",
+  id: string
+) => {
+  await apiClient.delete(`/${kind}/${id}`);
 };
