@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from pydantic import BaseModel, Field, model_validator
 
 from ...api.dependencies import ActorContext, get_actor_context, get_entry_gateway
+from ...config import load_settings
 from ...domain.ef06_entrystore.gateway import (
     EntrySearchFilters,
     EntryStoreGateway,
@@ -124,6 +125,7 @@ class EntryListItem(BaseModel):
     display_title: Optional[str] = None
     summary: Optional[str] = None
     summary_preview: Optional[str] = None
+    verbatim_preview: Optional[str] = None
     pipeline_status: str
     cognitive_status: str
     ingest_state: Optional[str] = None
@@ -506,13 +508,14 @@ def _build_filter_echo(
 
 
 def _serialize_entry(entry: Entry) -> EntryListItem:
-    summary_preview = entry.summary or entry.verbatim_preview
+    summary_preview = entry.verbatim_preview or entry.summary
     semantic_tags = list(entry.semantic_tags or []) if entry.semantic_tags else None
     return EntryListItem(
         entry_id=entry.entry_id,
         display_title=entry.display_title,
         summary=entry.summary,
         summary_preview=summary_preview,
+        verbatim_preview=entry.verbatim_preview,
         pipeline_status=entry.pipeline_status,
         cognitive_status=entry.cognitive_status,
         ingest_state=_extract_ingest_state(entry),
@@ -585,7 +588,19 @@ def _invalid_request(
 
 
 def _is_patch_enabled() -> bool:
-    return os.getenv("ENABLE_TAXONOMY_PATCH", "0").lower() in {"1", "true", "yes"}
+    truthy = {"1", "true", "yes"}
+    env_value = os.getenv("ENABLE_TAXONOMY_PATCH")
+    if env_value is not None:
+        return env_value.lower() in truthy
+
+    settings = load_settings()
+    features = settings.features or {}
+    flag = features.get("enable_taxonomy_patch")
+    if isinstance(flag, bool):
+        return flag
+    if isinstance(flag, str):
+        return flag.lower() in truthy
+    return bool(flag)
 
 
 def _feature_disabled_error() -> HTTPException:

@@ -1,10 +1,45 @@
-import { ReactNode, useEffect } from "react";
+import { ReactNode, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useEntryDetail } from "../hooks/useEntryDetail";
 import { useUiLayoutStore } from "../state/useUiLayoutStore";
 
 const formatDateTime = (value?: string | null) =>
   value ? new Date(value).toLocaleString() : "—";
+
+const formatLabel = (value?: string | null) => {
+  if (!value) {
+    return "—";
+  }
+  return value
+    .replace(/_/g, " ")
+    .replace(/\b(\w)/g, (match) => match.toUpperCase())
+    .trim();
+};
+
+const formatStatus = (value?: string | null) => {
+  if (!value) {
+    return "Pending";
+  }
+  return formatLabel(value);
+};
+
+const formatPreview = (value?: string | null) => {
+  const text = value?.trim();
+  if (!text) {
+    return "No preview captured yet.";
+  }
+  return text.length <= 600 ? text : `${text.slice(0, 600)}…`;
+};
+
+const formatBoolean = (value?: boolean) => {
+  if (value === undefined) {
+    return "—";
+  }
+  return value ? "Yes" : "No";
+};
+
+const readBooleanFlag = (value: unknown): boolean | undefined =>
+  typeof value === "boolean" ? value : undefined;
 
 const SectionCard = ({
   title,
@@ -57,6 +92,10 @@ const TextBlock = ({
 
 export const EntryDetailPage = () => {
   const { entryId } = useParams<{ entryId: string }>();
+  const [showExtraction, setShowExtraction] = useState(false);
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "error">(
+    "idle"
+  );
   const openSecondaryPanel = useUiLayoutStore(
     (state) => state.openSecondaryPanel
   );
@@ -71,7 +110,52 @@ export const EntryDetailPage = () => {
     return () => closeSecondaryPanel();
   }, [entryId, closeSecondaryPanel, openSecondaryPanel]);
 
+  useEffect(() => {
+    setShowExtraction(false);
+    setCopyState("idle");
+  }, [entryId]);
+
   const { data, isLoading, isError, refetch } = useEntryDetail(entryId);
+
+  const archivedFlag = useMemo(() => {
+    if (!data) {
+      return undefined;
+    }
+    const metadataRecord = (data.metadata ?? {}) as Record<string, unknown>;
+    const captureMetadataValue = metadataRecord["capture_metadata"];
+    const captureMetadata =
+      captureMetadataValue && typeof captureMetadataValue === "object"
+        ? (captureMetadataValue as Record<string, unknown>)
+        : undefined;
+    return (
+      readBooleanFlag(
+        captureMetadata ? captureMetadata["is_archived"] : undefined
+      ) ?? readBooleanFlag(metadataRecord["is_archived"])
+    );
+  }, [data]);
+
+  const handleCopyEntryId = async () => {
+    if (!data?.entry_id) {
+      return;
+    }
+    if (
+      typeof navigator === "undefined" ||
+      !navigator.clipboard ||
+      typeof navigator.clipboard.writeText !== "function"
+    ) {
+      setCopyState("error");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(data.entry_id);
+      setCopyState("copied");
+      window.setTimeout(() => setCopyState("idle"), 2000);
+    } catch (error) {
+      console.error("copy_entry_id_failed", error);
+      setCopyState("error");
+      window.setTimeout(() => setCopyState("idle"), 2000);
+    }
+  };
 
   if (!entryId) {
     return (
@@ -112,21 +196,22 @@ export const EntryDetailPage = () => {
   );
 
   const infoGridItems = [
-    { label: "Entry Id", value: data.entry_id },
-    { label: "Type", value: data.type_label ?? data.type_id ?? "—" },
-    { label: "Domain", value: data.domain_label ?? data.domain_id ?? "—" },
-    { label: "Pipeline", value: data.pipeline_status },
-    { label: "Cognitive", value: data.cognitive_status },
-    { label: "Ingest State", value: data.ingest_state ?? "—" },
-    { label: "Source Channel", value: data.source_channel },
+    { label: "Type", value: data.type_label ?? "Unlabeled" },
+    { label: "Domain", value: data.domain_label ?? "—" },
+    { label: "Pipeline", value: formatLabel(data.pipeline_status) },
+    { label: "Status", value: formatStatus(data.cognitive_status) },
+    {
+      label: "Ingest State",
+      value: formatLabel(data.ingest_state ?? undefined),
+    },
+    { label: "Source Type", value: formatLabel(data.source_type) },
+    { label: "Source Channel", value: formatLabel(data.source_channel) },
     { label: "Source Path", value: data.source_path ?? "—" },
+    { label: "Content Language", value: data.content_lang ?? "—" },
     { label: "Created", value: formatDateTime(data.created_at) },
     { label: "Updated", value: formatDateTime(data.updated_at) },
-    { label: "Content Language", value: data.content_lang ?? "—" },
-    {
-      label: "Summary Model",
-      value: data.summary_model ?? "—",
-    },
+    { label: "Summary Model", value: data.summary_model ?? "—" },
+    { label: "Archived", value: formatBoolean(archivedFlag) },
   ];
 
   return (
@@ -142,9 +227,22 @@ export const EntryDetailPage = () => {
           <span>/</span>
           <span>Entry Detail</span>
         </div>
-        <h1 className="text-2xl font-semibold text-[var(--color-text)]">
-          {data.display_title ?? data.entry_id}
-        </h1>
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="text-2xl font-semibold text-[var(--color-text)]">
+            {data.display_title ?? "Untitled Entry"}
+          </h1>
+          <button
+            type="button"
+            onClick={handleCopyEntryId}
+            className="rounded-full border border-[var(--color-border)] px-3 py-1 text-xs uppercase tracking-[0.3em] text-[var(--color-text-muted)] hover:border-[var(--color-accent)]"
+          >
+            {copyState === "copied"
+              ? "Entry ID Copied"
+              : copyState === "error"
+              ? "Copy Unavailable"
+              : "Copy Entry ID"}
+          </button>
+        </div>
         <p className="text-sm text-[var(--color-text-muted)]">
           Inspect capture metadata, summaries, and transcript material for a
           single entry.
@@ -172,20 +270,48 @@ export const EntryDetailPage = () => {
       </SectionCard>
 
       <TextBlock
+        label="Source Preview"
+        text={formatPreview(data.verbatim_preview)}
+        placeholder="No preview captured yet."
+      />
+
+      <TextBlock
         label="Transcription Text"
         text={data.transcription_text}
         placeholder="No transcription captured for this entry yet."
-      />
-      <TextBlock
-        label="Extracted Text"
-        text={data.extracted_text}
-        placeholder="No extraction payload has been recorded."
       />
       <TextBlock
         label="Normalized Text"
         text={data.normalized_text}
         placeholder="Normalization has not produced text for this entry yet."
       />
+
+      {data.extracted_text && (
+        <SectionCard title="Document Extraction Text (debug)">
+          {showExtraction ? (
+            <div className="space-y-3 text-xs leading-relaxed text-[var(--color-text-muted)]">
+              <button
+                type="button"
+                onClick={() => setShowExtraction(false)}
+                className="rounded-full border border-[var(--color-border)] px-3 py-1 text-[var(--color-text)]"
+              >
+                Hide raw extraction
+              </button>
+              <p className="whitespace-pre-wrap text-[var(--color-text)]">
+                {data.extracted_text}
+              </p>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowExtraction(true)}
+              className="rounded-full border border-dashed border-[var(--color-border)] px-3 py-1 text-xs uppercase tracking-[0.3em] text-[var(--color-text-muted)]"
+            >
+              Show raw extraction
+            </button>
+          )}
+        </SectionCard>
+      )}
 
       <SectionCard title="Metadata">
         {metadataItems.length === 0 ? (

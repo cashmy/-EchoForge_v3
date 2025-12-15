@@ -1,25 +1,12 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { CaptureRequestPayload } from "../api/capture";
 import { submitCapture } from "../api/capture";
-import type { EntryPatchRequest } from "../api/entries";
-import { patchEntryTaxonomy } from "../api/entries";
-import { useTaxonomyStore } from "../state/useTaxonomyStore";
-
-interface ManualEntrySubmission {
-  capturePayload: CaptureRequestPayload;
-  taxonomyPayload?: EntryPatchRequest;
-}
 
 export const ManualEntryPage = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const types = useTaxonomyStore((state) => state.types);
-  const domains = useTaxonomyStore((state) => state.domains);
-  const taxonomyStatus = useTaxonomyStore((state) => state.status);
-  const taxonomyEnabled = useTaxonomyStore((state) => state.featureEnabled);
-  const loadTaxonomy = useTaxonomyStore((state) => state.loadTaxonomy);
 
   const [title, setTitle] = useState("");
   const [sourceChannel, setSourceChannel] = useState("manual_text");
@@ -28,31 +15,12 @@ export const ManualEntryPage = () => {
   const [filePath, setFilePath] = useState("");
   const [notes, setNotes] = useState("");
   const [tagsInput, setTagsInput] = useState("");
-  const [typeId, setTypeId] = useState<string>("");
-  const [domainId, setDomainId] = useState<string>("");
   const [formError, setFormError] = useState<string | null>(null);
   const [successEntryId, setSuccessEntryId] = useState<string | null>(null);
 
-  const selectedType = useMemo(
-    () => types.find((record) => record.id === typeId),
-    [typeId, types]
-  );
-  const selectedDomain = useMemo(
-    () => domains.find((record) => record.id === domainId),
-    [domainId, domains]
-  );
-
   const captureMutation = useMutation({
-    mutationFn: async ({
-      capturePayload,
-      taxonomyPayload,
-    }: ManualEntrySubmission) => {
-      const captureResponse = await submitCapture(capturePayload);
-      if (taxonomyPayload) {
-        await patchEntryTaxonomy(captureResponse.entry_id, taxonomyPayload);
-      }
-      return captureResponse;
-    },
+    mutationFn: async (capturePayload: CaptureRequestPayload) =>
+      submitCapture(capturePayload),
     onSuccess: (response) => {
       setSuccessEntryId(response.entry_id);
       queryClient.invalidateQueries({ queryKey: ["entries"] });
@@ -69,8 +37,6 @@ export const ManualEntryPage = () => {
     setFilePath("");
     setNotes("");
     setTagsInput("");
-    setTypeId("");
-    setDomainId("");
     setFormError(null);
   };
 
@@ -114,14 +80,6 @@ export const ManualEntryPage = () => {
     if (tagList.length > 0) {
       metadata.manual_entry_tags = tagList;
     }
-    if (selectedType) {
-      metadata.manual_entry_selected_type_id = selectedType.id;
-      metadata.manual_entry_selected_type_label = selectedType.label;
-    }
-    if (selectedDomain) {
-      metadata.manual_entry_selected_domain_id = selectedDomain.id;
-      metadata.manual_entry_selected_domain_label = selectedDomain.label;
-    }
     if (mode === "file_ref" && trimmedFilePath) {
       metadata.manual_entry_file_path = trimmedFilePath;
     }
@@ -129,6 +87,7 @@ export const ManualEntryPage = () => {
     const capturePayload: CaptureRequestPayload = {
       mode,
       source_channel: trimmedChannel || undefined,
+      display_title: trimmedTitle,
       metadata: Object.keys(metadata).length ? metadata : undefined,
     };
     if (mode === "text") {
@@ -137,56 +96,14 @@ export const ManualEntryPage = () => {
       capturePayload.file_path = trimmedFilePath;
     }
 
-    let taxonomyPayload: EntryPatchRequest | undefined;
-    if (taxonomyEnabled && (selectedType || selectedDomain)) {
-      taxonomyPayload = {
-        taxonomy: {
-          ...(selectedType
-            ? { type: { id: selectedType.id, label: selectedType.label } }
-            : {}),
-          ...(selectedDomain
-            ? { domain: { id: selectedDomain.id, label: selectedDomain.label } }
-            : {}),
-        },
-      };
-    }
-
     try {
-      await captureMutation.mutateAsync({
-        capturePayload,
-        taxonomyPayload,
-      });
+      await captureMutation.mutateAsync(capturePayload);
       resetForm();
     } catch (error) {
       setFormError(
         error instanceof Error ? error.message : "Unable to save entry."
       );
     }
-  };
-
-  const renderTaxonomyStatus = () => {
-    if (!taxonomyEnabled) {
-      return (
-        <p className="text-sm text-[var(--color-text-muted)]">
-          Taxonomy selectors are disabled because the backend flag is off.
-        </p>
-      );
-    }
-    if (taxonomyStatus === "loading") {
-      return (
-        <p className="text-sm text-[var(--color-text-muted)]">
-          Loading types and domains…
-        </p>
-      );
-    }
-    if (taxonomyStatus === "error") {
-      return (
-        <p className="text-sm text-rose-600">
-          Unable to load taxonomy records. Try refreshing below.
-        </p>
-      );
-    }
-    return null;
   };
 
   return (
@@ -366,62 +283,6 @@ export const ManualEntryPage = () => {
               </p>
             </div>
           )}
-        </section>
-
-        <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-xs uppercase tracking-[0.3em] text-[var(--color-text-muted)]">
-                Taxonomy
-              </p>
-              <h2 className="text-lg font-semibold text-[var(--color-text)]">
-                Optional type & domain
-              </h2>
-            </div>
-            <button
-              type="button"
-              className="rounded-full border border-[var(--color-border)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em]"
-              onClick={() => loadTaxonomy({ force: true })}
-              disabled={isSubmitting || !taxonomyEnabled}
-            >
-              Refresh
-            </button>
-          </div>
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
-            <label className="flex flex-col gap-1 text-sm font-medium text-[var(--color-text)]">
-              Type
-              <select
-                value={typeId}
-                onChange={(event) => setTypeId(event.target.value)}
-                className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2"
-                disabled={isSubmitting || !taxonomyEnabled}
-              >
-                <option value="">Unassigned</option>
-                {types.map((record) => (
-                  <option key={record.id} value={record.id}>
-                    {record.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex flex-col gap-1 text-sm font-medium text-[var(--color-text)]">
-              Domain
-              <select
-                value={domainId}
-                onChange={(event) => setDomainId(event.target.value)}
-                className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2"
-                disabled={isSubmitting || !taxonomyEnabled}
-              >
-                <option value="">Unassigned</option>
-                {domains.map((record) => (
-                  <option key={record.id} value={record.id}>
-                    {record.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <div className="mt-3 text-sm">{renderTaxonomyStatus()}</div>
         </section>
 
         <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">

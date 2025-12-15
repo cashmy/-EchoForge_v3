@@ -55,14 +55,19 @@ function formatDateTime(value?: string | null) {
   return value ? new Date(value).toLocaleString() : "—";
 }
 
-function formatSummary(text?: string | null) {
-  if (!text) {
-    return "No summary available yet.";
+function formatPreview(text?: string | null) {
+  const value = text?.trim();
+  if (!value) {
+    return "No preview captured yet.";
   }
-  if (text.length <= 220) {
-    return text;
+  return value.length <= 220 ? value : `${value.slice(0, 220)}…`;
+}
+
+function formatStatus(value?: string | null) {
+  if (!value) {
+    return "Pending";
   }
-  return `${text.slice(0, 220)}…`;
+  return formatLabel(value);
 }
 
 const toStartOfDayIso = (value?: string) =>
@@ -112,7 +117,7 @@ const EntriesTable = ({ items }: { items: EntryListItem[] }) => (
         <tr>
           <th className="px-4 py-3 text-left">Entry</th>
           <th className="px-4 py-3 text-left">Pipeline</th>
-          <th className="px-4 py-3 text-left">Cognitive</th>
+          <th className="px-4 py-3 text-left">Status</th>
           <th className="px-4 py-3 text-right">Last Updated</th>
           <th className="px-4 py-3 text-right">Actions</th>
         </tr>
@@ -125,13 +130,13 @@ const EntriesTable = ({ items }: { items: EntryListItem[] }) => (
                 to={`/entries/${entry.entry_id}`}
                 className="font-semibold text-[var(--color-accent)] hover:underline"
               >
-                {entry.display_title ?? entry.entry_id}
+                {entry.display_title ?? "Untitled Entry"}
               </Link>
               <p className="mt-1 text-xs text-[var(--color-text-muted)]">
                 {entry.type_label ?? "Unlabeled"} • {entry.domain_label ?? "—"}
               </p>
               <p className="mt-2 text-sm text-[var(--color-text-muted)]">
-                {formatSummary(entry.summary_preview ?? entry.summary)}
+                {formatPreview(entry.verbatim_preview)}
               </p>
             </td>
             <td className="px-4 py-3 text-sm">
@@ -146,9 +151,7 @@ const EntriesTable = ({ items }: { items: EntryListItem[] }) => (
             </td>
             <td className="px-4 py-3 text-sm">
               <p className="font-semibold">
-                {entry.cognitive_status
-                  ? formatLabel(entry.cognitive_status)
-                  : "pending"}
+                {formatStatus(entry.cognitive_status)}
               </p>
               <p className="text-xs text-[var(--color-text-muted)]">
                 {formatLabel(entry.source_channel)}

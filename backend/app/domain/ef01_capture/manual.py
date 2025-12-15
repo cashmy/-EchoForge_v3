@@ -23,6 +23,7 @@ def capture_manual_text(
     entry_gateway: EntryStoreGateway,
     source_channel: str = "manual_text",
     metadata: Optional[Dict[str, object]] = None,
+    display_title: Optional[str] = None,
 ) -> Entry:
     """Persist a manual text capture via EF-06 EntryStore."""
 
@@ -38,11 +39,18 @@ def capture_manual_text(
     merged_metadata[MANUAL_TEXT_BODY_KEY] = normalized
     merged_metadata[MANUAL_TEXT_LENGTH_KEY] = len(normalized)
 
+    if display_title is None:
+        raw_title = merged_metadata.get("manual_entry_title")
+        if isinstance(raw_title, str):
+            trimmed_title = raw_title.strip()
+            display_title = trimmed_title or None
+
     entry = entry_gateway.create_entry(
         source_type="text",
         source_channel=source_channel,
         metadata=merged_metadata,
         pipeline_status="captured",
+        display_title=display_title,
     )
     logger.info(
         "manual_text_capture_created",

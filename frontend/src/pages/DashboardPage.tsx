@@ -297,7 +297,7 @@ const NeedsReviewList = ({ items }: { items: NeedsReviewItem[] }) => {
             className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-3"
           >
             <p className="font-semibold text-[var(--color-text)]">
-              {item.display_title ?? item.entry_id}
+              {item.display_title ?? "Untitled Entry"}
             </p>
             <p className="text-xs text-[var(--color-text-muted)]">
               {formatLabel(item.pipeline_status)} •{" "}
@@ -333,7 +333,7 @@ const RecentProcessedList = ({ items }: { items: RecentItem[] }) => {
           >
             <div>
               <p className="font-semibold text-[var(--color-text)]">
-                {item.display_title ?? item.entry_id}
+                {item.display_title ?? "Untitled Entry"}
               </p>
               <p className="text-xs text-[var(--color-text-muted)]">
                 {formatLabel(item.pipeline_status)}

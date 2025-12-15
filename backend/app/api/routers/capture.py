@@ -13,7 +13,10 @@ from ...domain.ef01_capture.fingerprint import compute_file_fingerprint
 from ...domain.ef01_capture.idempotency import evaluate_idempotency
 from ...domain.ef01_capture.manual import capture_manual_text
 from ...domain.ef01_capture.runtime import InfraJobQueueAdapter
-from ...domain.ef06_entrystore.gateway import EntryStoreGateway
+from ...domain.ef06_entrystore.gateway import (
+    DuplicateCaptureError,
+    EntryStoreGateway,
+)
 from ...infra.logging import get_logger
 
 router = APIRouter(prefix="/api/capture", tags=["capture"])
@@ -27,6 +30,10 @@ class CaptureRequest(BaseModel):
     mode: Literal["text", "file_ref"]
     source_channel: Optional[str] = Field(
         default=None, description="Logical capture channel (defaults per mode)."
+    )
+    display_title: Optional[str] = Field(
+        default=None,
+        description="Optional human-friendly title rendered in the Entries UI.",
     )
     content: Optional[str] = Field(
         default=None, description="Freeform text payload required for mode=text."
@@ -65,12 +72,35 @@ def capture_entry(
     job_enqueuer: InfraJobQueueAdapter = Depends(get_job_enqueuer),
 ) -> CaptureResponse:
     if payload.mode == "text":
-        entry = capture_manual_text(
-            text=payload.content or "",
-            entry_gateway=entry_gateway,
-            source_channel=payload.source_channel or "manual_text",
-            metadata=payload.metadata,
-        )
+        source_channel = payload.source_channel or "manual_text"
+        display_title = _resolve_display_title(payload.display_title, payload.metadata)
+        try:
+            entry = capture_manual_text(
+                text=payload.content or "",
+                entry_gateway=entry_gateway,
+                source_channel=source_channel,
+                metadata=payload.metadata,
+                display_title=display_title,
+            )
+        except DuplicateCaptureError as exc:
+            logger.info(
+                "capture_api_manual_text_duplicate",
+                extra={
+                    "source_channel": source_channel,
+                    "fingerprint": exc.fingerprint,
+                    "existing_entry_id": exc.existing_entry_id,
+                },
+            )
+            raise _http_error(
+                status.HTTP_409_CONFLICT,
+                "EF07-CONFLICT",
+                "Manual text matches an existing capture",
+                {
+                    "entry_id": exc.existing_entry_id,
+                    "source_channel": source_channel,
+                },
+            ) from exc
+
         logger.info(
             "capture_api_text_accepted",
             extra={"entry_id": entry.entry_id, "source_channel": entry.source_channel},
@@ -120,6 +150,7 @@ def _capture_file_reference(
 
     source_type = _infer_source_type(path)
     metadata: Dict[str, Any] = dict(payload.metadata or {})
+    display_title = _resolve_display_title(payload.display_title, metadata)
     metadata.setdefault("capture_fingerprint", fingerprint)
     metadata.setdefault("fingerprint_algo", algorithm)
     metadata.setdefault("api_capture_file_path", str(path))
@@ -130,6 +161,7 @@ def _capture_file_reference(
         source_path=str(path),
         metadata=metadata,
         pipeline_status="captured",
+        display_title=display_title,
     )
     logger.info(
         "capture_api_file_entry_created",
@@ -210,3 +242,26 @@ def _http_error(
             "details": details or {},
         },
     )
+
+
+def _resolve_display_title(
+    payload_title: Optional[str], metadata: Optional[Dict[str, Any]]
+) -> Optional[str]:
+    normalized = _normalize_display_title(payload_title)
+    if normalized:
+        return normalized
+    return _derive_manual_entry_title(metadata)
+
+
+def _derive_manual_entry_title(metadata: Optional[Dict[str, Any]]) -> Optional[str]:
+    if not metadata:
+        return None
+    raw = metadata.get("manual_entry_title")
+    return _normalize_display_title(raw)
+
+
+def _normalize_display_title(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    trimmed = value.strip()
+    return trimmed or None

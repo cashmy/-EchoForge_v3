@@ -5,6 +5,7 @@ export type CaptureMode = "text" | "file_ref";
 export interface CaptureRequestPayload {
   mode: CaptureMode;
   source_channel?: string;
+  display_title?: string;
   content?: string;
   file_path?: string;
   metadata?: Record<string, unknown>;

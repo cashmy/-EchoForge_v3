@@ -14,7 +14,9 @@ def test_capture_manual_text_persists_entry_with_metadata():
     gateway = InMemoryEntryStoreGateway()
 
     entry = capture_manual_text(
-        text="Manual note", entry_gateway=gateway, metadata={"title": "note"}
+        text="Manual note",
+        entry_gateway=gateway,
+        metadata={"manual_entry_title": "  Manual note  "},
     )
 
     assert entry.source_type == "text"
@@ -23,6 +25,7 @@ def test_capture_manual_text_persists_entry_with_metadata():
     assert entry.metadata["manual_text_length"] == len("Manual note")
     assert entry.metadata["capture_fingerprint"]
     assert entry.metadata["fingerprint_algo"] == "sha256(text)"
+    assert entry.display_title == "Manual note"
 
 
 def test_capture_manual_text_rejects_blank_payload():
@@ -30,3 +33,16 @@ def test_capture_manual_text_rejects_blank_payload():
 
     with pytest.raises(ValueError):
         capture_manual_text(text="   ", entry_gateway=gateway)
+
+
+def test_capture_manual_text_prefers_explicit_display_title():
+    gateway = InMemoryEntryStoreGateway()
+
+    entry = capture_manual_text(
+        text="Manual note",
+        entry_gateway=gateway,
+        metadata={"manual_entry_title": "Metadata Title"},
+        display_title="Explicit Title",
+    )
+
+    assert entry.display_title == "Explicit Title"

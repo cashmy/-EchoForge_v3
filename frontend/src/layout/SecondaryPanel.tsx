@@ -1,7 +1,33 @@
+import { useState } from "react";
 import { X } from "lucide-react";
 import { useParams, Link } from "react-router-dom";
 import { useEntryDetail } from "../hooks/useEntryDetail";
 import { useUiLayoutStore } from "../state/useUiLayoutStore";
+
+const formatLabel = (value?: string | null) => {
+  if (!value) {
+    return "—";
+  }
+  return value
+    .replace(/_/g, " ")
+    .replace(/\b(\w)/g, (match) => match.toUpperCase())
+    .trim();
+};
+
+const formatStatus = (value?: string | null) => {
+  if (!value) {
+    return "Pending";
+  }
+  return formatLabel(value);
+};
+
+const formatPreview = (value?: string | null) => {
+  const text = value?.trim();
+  if (!text) {
+    return "No preview captured yet.";
+  }
+  return text.length <= 180 ? text : `${text.slice(0, 180)}…`;
+};
 
 const PanelChrome = ({
   title,
@@ -39,6 +65,9 @@ const WhisperSettingsPlaceholder = () => (
 const EntryDetailPreview = () => {
   const { entryId } = useParams<{ entryId?: string }>();
   const { data, isLoading, isError } = useEntryDetail(entryId);
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "error">(
+    "idle"
+  );
 
   if (!entryId) {
     return <EntryDetailPlaceholder />;
@@ -57,40 +86,73 @@ const EntryDetailPreview = () => {
     );
   }
 
+  const handleCopyEntryId = async () => {
+    if (!data.entry_id) {
+      return;
+    }
+    if (
+      typeof navigator === "undefined" ||
+      !navigator.clipboard ||
+      typeof navigator.clipboard.writeText !== "function"
+    ) {
+      setCopyState("error");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(data.entry_id);
+      setCopyState("copied");
+      window.setTimeout(() => setCopyState("idle"), 1500);
+    } catch (error) {
+      console.error("copy_entry_id_preview_failed", error);
+      setCopyState("error");
+      window.setTimeout(() => setCopyState("idle"), 1500);
+    }
+  };
+
   return (
     <div className="flex h-full flex-col gap-4 px-6 py-6 text-[var(--color-text)]">
       <div>
         <p className="text-xs uppercase tracking-[0.3em] text-[var(--color-text-muted)]">
           Entry Detail
         </p>
-        <h3 className="mt-2 text-base font-semibold">
-          {data.display_title ?? data.entry_id}
-        </h3>
-        <p className="text-xs text-[var(--color-text-muted)]">
-          {data.entry_id}
-        </p>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <h3 className="text-base font-semibold">
+            {data.display_title ?? "Untitled Entry"}
+          </h3>
+          <button
+            type="button"
+            onClick={handleCopyEntryId}
+            className="rounded-full border border-[var(--color-border)] px-2 py-0.5 text-[10px] uppercase tracking-[0.3em] text-[var(--color-text-muted)]"
+          >
+            {copyState === "copied"
+              ? "Copied"
+              : copyState === "error"
+              ? "Copy Unavailable"
+              : "Copy ID"}
+          </button>
+        </div>
       </div>
       <div className="space-y-2 text-xs">
         <p>
           <strong className="font-semibold">Pipeline:</strong>{" "}
-          {data.pipeline_status}
+          {formatLabel(data.pipeline_status)}
         </p>
         <p>
-          <strong className="font-semibold">Cognitive:</strong>{" "}
-          {data.cognitive_status}
+          <strong className="font-semibold">Status:</strong>{" "}
+          {formatStatus(data.cognitive_status)}
         </p>
         <p>
           <strong className="font-semibold">Source:</strong>{" "}
-          {data.source_channel}
+          {formatLabel(data.source_channel)}
         </p>
         <p>
           <strong className="font-semibold">Updated:</strong>{" "}
           {new Date(data.updated_at).toLocaleString()}
         </p>
       </div>
-      {data.summary && (
-        <p className="text-sm text-[var(--color-text-muted)]">{data.summary}</p>
-      )}
+      <p className="text-sm text-[var(--color-text-muted)]">
+        {formatPreview(data.verbatim_preview)}
+      </p>
       <Link
         to={`/entries/${data.entry_id}`}
         className="mt-auto inline-flex w-full items-center justify-center rounded-full border border-[var(--color-border)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-[var(--color-accent)]"

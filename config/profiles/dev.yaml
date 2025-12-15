@@ -87,5 +87,5 @@ echo:
     extraction_public_base_url: null
 
 features:
-  enable_taxonomy_refs_in_capture: false
-  enable_taxonomy_patch: false
+  enable_taxonomy_refs_in_capture: true
+  enable_taxonomy_patch: true

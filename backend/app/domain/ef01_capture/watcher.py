@@ -5,7 +5,7 @@ from __future__ import annotations
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, Protocol
+from typing import Dict, Iterable, Optional, Protocol
 
 from .fingerprint import compute_file_fingerprint
 from .idempotency import EntryFingerprintReader, evaluate_idempotency
@@ -35,6 +35,7 @@ class EntryCreator(Protocol):  # pragma: no cover - structural typing hook
         source_path: str,
         metadata: Dict[str, object],
         pipeline_status: str,
+        display_title: Optional[str] = None,
     ) -> Entry: ...
 
     def update_pipeline_status(

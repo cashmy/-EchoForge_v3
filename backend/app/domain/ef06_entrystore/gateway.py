@@ -10,16 +10,15 @@ from sqlalchemy import (
     MetaData,
     Table,
     Text,
-    and_,
     cast,
     func,
     insert,
-    literal_column,
     or_,
     select,
     update,
 )
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import IntegrityError
 
 from ...infra.db import ENGINE
 from ...infra.logging import get_logger
@@ -27,6 +26,7 @@ from .models import Entry, utcnow
 from .pipeline_states import DEFAULT_INGEST_STATE, resolve_next_ingest_state
 
 __all__ = [
+    "DuplicateCaptureError",
     "EntryStoreGateway",
     "FingerprintReadableGateway",
     "InMemoryEntryStoreGateway",
@@ -37,6 +37,28 @@ __all__ = [
 ]
 
 logger = get_logger(__name__)
+
+
+class DuplicateCaptureError(RuntimeError):
+    """Raised when a capture request duplicates an existing fingerprint/channel."""
+
+    def __init__(
+        self,
+        *,
+        fingerprint: str,
+        source_channel: str,
+        existing_entry_id: Optional[str] = None,
+    ) -> None:
+        self.fingerprint = fingerprint
+        self.source_channel = source_channel
+        self.existing_entry_id = existing_entry_id
+        message = (
+            "Duplicate capture detected for channel"
+            f" '{source_channel}' (fingerprint={fingerprint})"
+        )
+        if existing_entry_id:
+            message += f" existing_entry_id={existing_entry_id}"
+        super().__init__(message)
 
 
 @dataclass(frozen=True)
@@ -83,6 +105,7 @@ class EntryStoreGateway(Protocol):  # pragma: no cover
         metadata: Optional[Dict[str, object]] = None,
         pipeline_status: str = "ingested",
         cognitive_status: str = "unreviewed",
+        display_title: Optional[str] = None,
     ) -> Entry: ...
 
     def update_pipeline_status(
@@ -221,6 +244,7 @@ class InMemoryEntryStoreGateway(EntryStoreGateway, FingerprintReadableGateway):
         metadata: Optional[Dict[str, object]] = None,
         pipeline_status: str = "ingested",
         cognitive_status: str = "unreviewed",
+        display_title: Optional[str] = None,
     ) -> Entry:
         metadata = metadata or {}
         fingerprint = metadata.get("capture_fingerprint")
@@ -235,6 +259,7 @@ class InMemoryEntryStoreGateway(EntryStoreGateway, FingerprintReadableGateway):
             pipeline_status=pipeline_status,
             cognitive_status=cognitive_status,
             timestamp=utcnow(),
+            display_title=display_title,
         )
         record = _bootstrap_capture_metadata(record)
         self._entries[record.entry_id] = record
@@ -615,6 +640,7 @@ class PostgresEntryStoreGateway(EntryStoreGateway, FingerprintReadableGateway):
         metadata: Optional[Dict[str, object]] = None,
         pipeline_status: str = "ingested",
         cognitive_status: str = "unreviewed",
+        display_title: Optional[str] = None,
     ) -> Entry:
         metadata_dict: Dict[str, Any] = dict(metadata or {})
         fingerprint = metadata_dict.get("capture_fingerprint")
@@ -630,53 +656,71 @@ class PostgresEntryStoreGateway(EntryStoreGateway, FingerprintReadableGateway):
             pipeline_status=pipeline_status,
             cognitive_status=cognitive_status,
             timestamp=timestamp,
+            display_title=display_title,
         )
         entry = _bootstrap_capture_metadata(entry)
 
+        # Filter insert values to columns that exist on the current table
+        # definition so partially migrated databases do not break inserts.
+        target_columns = set(self._entries.c.keys())
+        insert_values = {
+            "entry_id": entry.entry_id,
+            "source_type": entry.source_type,
+            "source_channel": entry.source_channel,
+            "source_path": entry.source_path,
+            "pipeline_status": entry.pipeline_status,
+            "cognitive_status": entry.cognitive_status,
+            "metadata": entry.metadata,
+            "created_at": entry.created_at,
+            "updated_at": entry.updated_at,
+            "capture_fingerprint": fingerprint,
+            "fingerprint_algo": metadata_dict.get("fingerprint_algo"),
+            "capture_metadata": entry.metadata.get("capture_metadata"),
+            "verbatim_path": entry.verbatim_path,
+            "verbatim_preview": entry.verbatim_preview,
+            "content_lang": entry.content_lang,
+            "transcription_text": entry.transcription_text,
+            "transcription_segments": entry.transcription_segments,
+            "transcription_metadata": entry.transcription_metadata,
+            "transcription_error": entry.transcription_error,
+            "extracted_text": entry.extracted_text,
+            "extraction_segments": entry.extraction_segments,
+            "extraction_metadata": entry.extraction_metadata,
+            "extraction_error": entry.extraction_error,
+            "normalized_text": entry.normalized_text,
+            "normalized_segments": entry.normalized_segments,
+            "normalization_metadata": entry.normalization_metadata,
+            "normalization_error": entry.normalization_error,
+            "summary": entry.summary,
+            "display_title": entry.display_title,
+            "summary_model": entry.summary_model,
+            "type_id": entry.type_id,
+            "type_label": entry.type_label,
+            "domain_id": entry.domain_id,
+            "domain_label": entry.domain_label,
+            "classification_model": entry.classification_model,
+            "is_classified": entry.is_classified,
+        }
+        filtered_values = {
+            column: value
+            for column, value in insert_values.items()
+            if column in target_columns
+        }
         insert_stmt = (
-            insert(self._entries)
-            .values(
-                entry_id=entry.entry_id,
-                source_type=entry.source_type,
-                source_channel=entry.source_channel,
-                source_path=entry.source_path,
-                pipeline_status=entry.pipeline_status,
-                cognitive_status=entry.cognitive_status,
-                metadata=entry.metadata,
-                created_at=entry.created_at,
-                updated_at=entry.updated_at,
-                capture_fingerprint=fingerprint,
-                fingerprint_algo=metadata_dict.get("fingerprint_algo"),
-                capture_metadata=entry.metadata.get("capture_metadata"),
-                verbatim_path=entry.verbatim_path,
-                verbatim_preview=entry.verbatim_preview,
-                content_lang=entry.content_lang,
-                transcription_text=entry.transcription_text,
-                transcription_segments=entry.transcription_segments,
-                transcription_metadata=entry.transcription_metadata,
-                transcription_error=entry.transcription_error,
-                extracted_text=entry.extracted_text,
-                extraction_segments=entry.extraction_segments,
-                extraction_metadata=entry.extraction_metadata,
-                extraction_error=entry.extraction_error,
-                normalized_text=entry.normalized_text,
-                normalized_segments=entry.normalized_segments,
-                normalization_metadata=entry.normalization_metadata,
-                normalization_error=entry.normalization_error,
-                summary=entry.summary,
-                display_title=entry.display_title,
-                summary_model=entry.summary_model,
-                type_id=entry.type_id,
-                type_label=entry.type_label,
-                domain_id=entry.domain_id,
-                domain_label=entry.domain_label,
-                classification_model=entry.classification_model,
-                is_classified=entry.is_classified,
-            )
-            .returning(self._entries)
+            insert(self._entries).values(**filtered_values).returning(self._entries)
         )
-        with self._engine.begin() as conn:
-            row = conn.execute(insert_stmt).mappings().first()
+        try:
+            with self._engine.begin() as conn:
+                row = conn.execute(insert_stmt).mappings().first()
+        except IntegrityError as exc:  # pragma: no cover - defensive
+            if fingerprint and self._is_fingerprint_conflict(exc):
+                existing = self.find_by_fingerprint(fingerprint, source_channel)
+                raise DuplicateCaptureError(
+                    fingerprint=fingerprint,
+                    source_channel=source_channel,
+                    existing_entry_id=(existing.entry_id if existing else None),
+                ) from exc
+            raise
         if row is None:  # pragma: no cover - defensive
             raise RuntimeError("failed to insert entry")
         return _row_to_entry(row)
@@ -770,12 +814,12 @@ class PostgresEntryStoreGateway(EntryStoreGateway, FingerprintReadableGateway):
             conditions.append(self._is_archived_col.is_(False))
         if filters.terms:
             searchable_columns = [
-                c.display_title,
-                c.summary,
-                c.verbatim_preview,
-                c.normalized_text,
+                self._get_column("display_title"),
+                self._get_column("summary"),
+                self._get_column("verbatim_preview"),
+                self._get_column("normalized_text"),
             ]
-            semantic_col = getattr(c, "semantic_tags", None)
+            semantic_col = self._get_column("semantic_tags")
             if semantic_col is not None:
                 searchable_columns.append(cast(semantic_col, Text))
             for term in filters.terms:
@@ -790,14 +834,34 @@ class PostgresEntryStoreGateway(EntryStoreGateway, FingerprintReadableGateway):
         return tuple(conditions)
 
     def _resolve_sort_column(self, sort_by: str):
+        default_column = self._entries.c.updated_at
         columns = {
             "created_at": self._entries.c.created_at,
-            "updated_at": self._entries.c.updated_at,
-            "display_title": self._entries.c.display_title,
+            "updated_at": default_column,
+            "display_title": self._get_column("display_title"),
             "pipeline_status": self._entries.c.pipeline_status,
             "cognitive_status": self._entries.c.cognitive_status,
         }
-        return columns.get(sort_by, self._entries.c.updated_at)
+        sort_column = columns.get(sort_by)
+        return sort_column if sort_column is not None else default_column
+
+    def _get_column(self, column_name: str):
+        """Return a reflected column if present; tolerate partially migrated schemas."""
+        return getattr(self._entries.c, column_name, None)
+
+    def _is_fingerprint_conflict(self, error: IntegrityError) -> bool:
+        orig = getattr(error, "orig", None)
+        if orig is None:
+            return False
+        diag = getattr(orig, "diag", None)
+        constraint = getattr(diag, "constraint_name", None)
+        if constraint and constraint.lower() == "idx_entries_fingerprint_channel":
+            return True
+        sqlstate = getattr(orig, "pgcode", None)
+        if sqlstate == "23505":
+            message = str(orig).lower()
+            return "idx_entries_fingerprint_channel" in message
+        return False
 
     # ------------------------------------------------------------------
     # Pipeline + transcription updates
